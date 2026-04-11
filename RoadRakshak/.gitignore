@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+backend/.env
+backend/.venv/
+backend/roadguard.db
+roadguard.db
+backend/reports/
+backend/snapshots/
+.vscode/

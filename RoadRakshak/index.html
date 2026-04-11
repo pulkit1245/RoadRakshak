@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>RoadGuard AI</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #0d0d0d;
+    color: #e8e8e8;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header {
+    width: 100%;
+    padding: 14px 24px;
+    background: #111;
+    border-bottom: 1px solid #222;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  header h1 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #00e5aa;
+    letter-spacing: .03em;
+  }
+  #conn-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #555;
+    transition: background .3s;
+  }
+  #conn-dot.live  { background: #00e57a; box-shadow: 0 0 6px #00e57a; }
+  #conn-dot.error { background: #ff4444; }
+
+  /* ── Feed area ── */
+  #feed-wrap {
+    margin: 20px auto 0;
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 2px solid #222;
+    max-width: 720px;
+    width: 100%;
+  }
+  #video {
+    display: block;
+    width: 100%;
+    border-radius: 8px;
+  }
+  /* Animated red border flash on collision */
+  #feed-wrap.alert-active {
+    border-color: #ff2222;
+    box-shadow: 0 0 24px 4px rgba(255,30,30,.55);
+    animation: borderPulse 0.9s infinite alternate;
+  }
+  @keyframes borderPulse {
+    from { border-color: #ff2222; }
+    to   { border-color: #ff8800; }
+  }
+
+  /* ── HUD bar ── */
+  #hud {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    max-width: 720px;
+    margin: 10px auto 0;
+    flex-wrap: wrap;
+  }
+  .hud-card {
+    flex: 1;
+    min-width: 120px;
+    background: #161616;
+    border: 1px solid #222;
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+  .hud-label {
+    font-size: 10px;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    margin-bottom: 4px;
+  }
+  .hud-val {
+    font-size: 22px;
+    font-weight: 600;
+    color: #e8e8e8;
+  }
+  .hud-val.danger { color: #ff4444; }
+  .hud-val.ok     { color: #00e57a; }
+  .hud-val.warn   { color: #f5a623; }
+
+  /* ── Alert panel ── */
+  #alert-panel {
+    width: 100%;
+    max-width: 720px;
+    margin: 10px auto 0;
+    min-height: 56px;
+  }
+  .alert-box {
+    background: #1c0505;
+    border: 1.5px solid #ff3333;
+    border-radius: 8px;
+    padding: 12px 16px;
+    animation: fadeIn .3s ease;
+    margin-bottom: 8px;
+  }
+  .alert-box .al-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #ff4444;
+    margin-bottom: 4px;
+  }
+  .alert-box .al-meta {
+    font-size: 12px;
+    color: #ccc;
+    line-height: 1.6;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 12px;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+  .badge-HIGH   { background:#ff2222; color:#fff; }
+  .badge-MEDIUM { background:#f5a623; color:#000; }
+  .badge-LOW    { background:#4CAF50; color:#fff; }
+
+  /* ── Evidence tags ── */
+  .ev-tag {
+    display: inline-block;
+    font-size: 10px;
+    background: #1f1f1f;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin: 2px 3px 2px 0;
+    color: #aaa;
+  }
+
+  /* ── Log ── */
+  #log-wrap {
+    width: 100%;
+    max-width: 720px;
+    margin: 10px auto 24px;
+    background: #0f0f0f;
+    border: 1px solid #1f1f1f;
+    border-radius: 8px;
+    max-height: 180px;
+    overflow-y: auto;
+    padding: 8px 12px;
+  }
+  .log-entry {
+    font-size: 11px;
+    color: #888;
+    padding: 3px 0;
+    border-bottom: 1px solid #1a1a1a;
+    font-family: 'Courier New', monospace;
+  }
+  .log-entry.coll { color: #ff7777; }
+  .log-entry.ok   { color: #00cc66; }
+
+  @keyframes fadeIn {
+    from { opacity:0; transform:translateY(-5px); }
+    to   { opacity:1; transform:none; }
+  }
+
+  /* ── Mode pill ── */
+  #mode-pill {
+    display: inline-block;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: #1f1f1f;
+    color: #aaa;
+    margin-left: auto;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div id="conn-dot"></div>
+  <h1>RoadGuard AI — Live Traffic Monitor</h1>
+  <span id="mode-pill">—</span>
+</header>
+
+<!-- Video feed -->
+<div id="feed-wrap">
+  <img id="video" alt="camera feed" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"/>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-card">
+    <div class="hud-label">Status</div>
+    <div class="hud-val ok" id="h-status">Live</div>
+  </div>
+  <div class="hud-card">
+    <div class="hud-label">FPS</div>
+    <div class="hud-val" id="h-fps">—</div>
+  </div>
+  <div class="hud-card">
+    <div class="hud-label">Collisions (session)</div>
+    <div class="hud-val danger" id="h-coll">0</div>
+  </div>
+  <div class="hud-card">
+    <div class="hud-label">Confidence</div>
+    <div class="hud-val" id="h-conf">—</div>
+  </div>
+  <div class="hud-card">
+    <div class="hud-label">Victims nearby</div>
+    <div class="hud-val warn" id="h-vic">0</div>
+  </div>
+</div>
+
+<!-- Alert panel -->
+<div id="alert-panel"></div>
+
+<!-- Log -->
+<div id="log-wrap" id="log"></div>
+
+<script>
+  const ws = new WebSocket("ws://127.0.0.1:8000/ws");
+
+  let totalCollisions  = 0;
+  let alertTimeout     = null;
+  const feedWrap       = document.getElementById("feed-wrap");
+  const logWrap        = document.getElementById("log-wrap");
+
+  function addLog(msg, cls='') {
+    const d = document.createElement('div');
+    d.className = 'log-entry ' + cls;
+    d.textContent = new Date().toLocaleTimeString() + '  ' + msg;
+    logWrap.prepend(d);
+    if (logWrap.children.length > 60) logWrap.lastChild.remove();
+  }
+
+  function clearAlerts() {
+    document.getElementById('alert-panel').innerHTML = '';
+    feedWrap.classList.remove('alert-active');
+    document.getElementById('h-status').textContent = 'Live';
+    document.getElementById('h-status').className = 'hud-val ok';
+    document.getElementById('h-conf').textContent = '—';
+    document.getElementById('h-vic').textContent  = '0';
+  }
+
+  function showAlert(coll) {
+    const sev  = coll.severity;
+    const conf = Math.round(coll.confidence * 100);
+    const vics = coll.victims;
+    const evs  = (coll.evidence || []).join(', ');
+
+    const panel = document.getElementById('alert-panel');
+
+    // Only create a new box if this is a fresh alert
+    if (coll.new_alert) {
+      totalCollisions++;
+      document.getElementById('h-coll').textContent = totalCollisions;
+      addLog(`COLLISION | sev=${sev} conf=${conf}% victims=${vics} ev=[${evs}]`, 'coll');
+
+      // Voice broadcast
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const msg = new SpeechSynthesisUtterance(
+          `Accident detected. Severity ${sev}. ${vics} victims nearby. Ambulance dispatch required.`);
+        msg.rate = 0.9; msg.volume = 1;
+        window.speechSynthesis.speak(msg);
+      }
+    }
+
+    panel.innerHTML = `
+      <div class="alert-box">
+        <div class="al-title">
+          COLLISION DETECTED
+          <span class="badge badge-${sev}">${sev}</span>
+        </div>
+        <div class="al-meta">
+          Confidence: <strong>${conf}%</strong> &nbsp;|&nbsp;
+          Victims nearby: <strong>${vics}</strong><br/>
+          Signals detected:&nbsp;
+          ${(coll.evidence||[]).map(e=>`<span class="ev-tag">${e}</span>`).join('')}
+        </div>
+      </div>`;
+
+    feedWrap.classList.add('alert-active');
+    document.getElementById('h-status').textContent = 'ALERT';
+    document.getElementById('h-status').className   = 'hud-val danger';
+    document.getElementById('h-conf').textContent   = conf + '%';
+    document.getElementById('h-vic').textContent    = vics;
+
+    // Auto-clear after 4s of no collision
+    clearTimeout(alertTimeout);
+    alertTimeout = setTimeout(clearAlerts, 4000);
+  }
+
+  ws.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+
+    // Video frame
+    document.getElementById("video").src =
+      "data:image/jpeg;base64," + data.frame;
+
+    // FPS + mode
+    document.getElementById("h-fps").textContent = data.fps || '—';
+    document.getElementById("mode-pill").textContent =
+      data.mode === 'night' ? 'Night mode' : 'Day mode';
+
+    // Collision handling
+    if (data.collision && data.collisions && data.collisions.length > 0) {
+      const worst = data.collisions.reduce(
+        (a, b) => a.confidence > b.confidence ? a : b);
+      showAlert(worst);
+    } else {
+      clearTimeout(alertTimeout);
+      alertTimeout = setTimeout(clearAlerts, 2000);
+    }
+  };
+
+  ws.onopen  = () => {
+    document.getElementById("conn-dot").className = "live";
+    addLog("Connected to RoadGuard AI server", "ok");
+  };
+  ws.onerror = () => {
+    document.getElementById("conn-dot").className = "error";
+    addLog("Connection error", "coll");
+  };
+  ws.onclose = () => {
+    document.getElementById("conn-dot").className = "";
+    addLog("Disconnected from server", "coll");
+  };
+</script>
+</body>
+</html>

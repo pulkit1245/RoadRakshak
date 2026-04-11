@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+python-jose[cryptography]
+passlib[bcrypt]
+python-dotenv
+python-multipart
+email-validator
+twilio
+reportlab
+ultralytics
+opencv-python-headless

@@ -1,0 +1,49 @@
+# Vite
+dist/
+.vite
+
+# Node
+node_modules/
+.npm
+package-lock.json
+yarn.lock
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+*~
+
+# Environment (NEVER commit real keys)
+.env
+.env.local
+.env.*.local
+RoadRakshak/.env
+RoadRakshak/backend/.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+RoadRakshak/venv/
+*.egg-info/
+
+# Database (contains local data)
+*.db
+RoadRakshak/roadguard.db
+
+# Snapshots & reports (generated at runtime)
+RoadRakshak/backend/snapshots/
+RoadRakshak/backend/reports/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
