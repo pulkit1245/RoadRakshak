@@ -17,6 +17,7 @@ export default function LiveFeed() {
   const [isRunning, setIsRunning] = useState(false);
   const [frameCount, setFrameCount] = useState(0);
   const [detections, setDetections] = useState([]);
+  const detectionsRef = useRef([]); // Fix stale closure for canvas drawing
   const [fps, setFps] = useState(0);
   const [latestDetection, setLatestDetection] = useState(null);
   const [error, setError] = useState('');
@@ -79,7 +80,8 @@ export default function LiveFeed() {
         // Append accident to history (deduplicate by incident id)
         if (data.accident) {
           const incidentId = data.id;
-          if (incidentId !== lastAccidentIdRef.current || incidentId === null) {
+          // Only process if it's a NEW incident (has a valid database ID)
+          if (incidentId && incidentId !== lastAccidentIdRef.current) {
             lastAccidentIdRef.current = incidentId;
 
             // Play siren sound 
@@ -128,10 +130,11 @@ export default function LiveFeed() {
                   incidentId: incidentId,
                   severity: data.severity || 'high',
                   location: data.location || 'unknown',
-                  vehicles: data.vehicles || 0,
+                  vehicles: data.vehicles_count || 0,
                   hospital: hospitals[0],
                   accidentLat: accLat,
                   accidentLon: accLon,
+                  snapshotBase64: data.annotated_frame || null,
                 }).then((result) => {
                   if (result) {
                     // Patch the dispatch result into the existing history entry
@@ -149,7 +152,10 @@ export default function LiveFeed() {
           }
         }
 
-        if (data.vehicles && Array.isArray(data.vehicles)) setDetections(data.vehicles);
+        if (data.vehicles && Array.isArray(data.vehicles)) {
+          setDetections(data.vehicles);
+          detectionsRef.current = data.vehicles;
+        }
       },
       onError: (payload) => {
         setConnectionStatus('error');
@@ -236,8 +242,9 @@ export default function LiveFeed() {
       canvas.width = img.width;
       canvas.height = img.height;
       ctx.drawImage(img, 0, 0);
-      if (detections && Array.isArray(detections)) {
-        detections.forEach((vehicle) => {
+      const currentDetections = detectionsRef.current;
+      if (currentDetections && Array.isArray(currentDetections)) {
+        currentDetections.forEach((vehicle) => {
           const bbox = vehicle.bbox || vehicle.bounding_box;
           if (bbox) {
             const [x1, y1, x2, y2] = bbox;
@@ -270,41 +277,54 @@ export default function LiveFeed() {
     new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-brand-dark text-white font-sans selection:bg-brand-accent/30">
       <audio id="siren-audio" src="/preview1.mp3" preload="auto" />
-      {/* Header */}
-      <div className="bg-gray-800 border-b border-gray-700 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold">🎥 Live Feed</h1>
-            <p className="text-sm text-gray-400">Real-time vehicle detection &amp; monitoring</p>
+
+      {/* Tactical Header */}
+      <nav className="sticky top-0 z-50 bg-brand-dark/80 backdrop-blur-xl border-b border-brand-border/50">
+        <div className="max-w-[1600px] mx-auto px-6 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-brand-accent rounded-xl flex items-center justify-center shadow-lg shadow-brand-accent/20">
+              <span className="text-xl">📹</span>
+            </div>
+            <div>
+              <h1 className="text-xl font-black tracking-tight uppercase">Control <span className="text-brand-accent">Center</span></h1>
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${connectionStatus === 'connected' ? 'bg-brand-success animate-pulse' : 'bg-brand-danger'}`}></span>
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
+                  {connectionStatus === 'connected' ? 'Uplink Established' : 'Signal Lost'} • Remote Node: 127.0.0.1
+                </p>
+              </div>
+            </div>
           </div>
+
           <button
             onClick={() => navigate('/dashboard')}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
+            className="flex items-center gap-2 px-6 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
           >
-            ← Dashboard
+            <span>←</span> Return to Dashboard
           </button>
         </div>
-      </div>
+      </nav>
 
       {error && (
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="bg-red-900 border border-red-700 rounded-lg p-4">
-            <p className="text-red-200 text-sm">⚠️ {error}</p>
+        <div className="max-w-[1600px] mx-auto px-6 py-4">
+          <div className="bg-brand-danger/10 border border-brand-danger/30 rounded-xl p-4 flex items-center gap-3">
+            <span className="text-brand-danger">⚠️</span>
+            <p className="text-brand-danger text-[10px] font-bold uppercase tracking-widest">System Alert: {error}</p>
           </div>
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <main className="max-w-[1600px] mx-auto px-6 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-          {/* ── Left column: video + stats + accident history ── */}
-          <div className="lg:col-span-2 space-y-5">
+          {/* ── Visual Feed & Telemetry (Left) ── */}
+          <div className="lg:col-span-8 space-y-6">
 
-            {/* Video card */}
-            <div className="bg-gray-800 rounded-xl overflow-hidden border border-gray-700">
-              <div className="relative bg-black">
+            {/* Main Visual Node */}
+            <div className="glass-card overflow-hidden border-none ring-1 ring-white/10">
+              <div className="relative aspect-video bg-black group">
                 {isRunning ? (
                   <>
                     <Webcam
@@ -312,60 +332,64 @@ export default function LiveFeed() {
                       screenshotFormat="image/jpeg"
                       screenshotQuality={0.6}
                       width="100%"
-                      videoConstraints={{ width: { ideal: 640 }, height: { ideal: 360 } }}
-                      className="w-full"
+                      videoConstraints={{ width: { ideal: 1280 }, height: { ideal: 720 } }}
+                      className="w-full h-full object-cover opacity-80"
                     />
                     <canvas
                       ref={canvasRef}
                       className="absolute top-0 left-0 w-full h-full"
                       style={{ mixBlendMode: 'screen' }}
                     />
+                    {/* HUD Overlay */}
+                    <div className="absolute inset-0 pointer-events-none border-[20px] border-transparent border-t-white/5 border-b-white/5"></div>
+                    <div className="absolute top-6 left-6 flex flex-col gap-1">
+                      <div className="bg-brand-accent px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest">Live Stream</div>
+                      <div className="bg-black/50 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-mono text-gray-300">REC: {new Date().toISOString().split('T')[1].split('.')[0]}</div>
+                    </div>
                   </>
                 ) : (
-                  <div className="w-full aspect-video flex items-center justify-center bg-gray-900">
-                    <div className="text-center">
-                      <p className="text-4xl mb-4">📹</p>
-                      <p className="text-gray-400">Click "Start Detection" to begin</p>
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-brand-dark">
+                    <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-6 border border-white/10">
+                      <span className="text-4xl opacity-50">📹</span>
                     </div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500">Node Standby • Waiting for Uplink</p>
                   </div>
                 )}
               </div>
-              <div className="p-4 border-t border-gray-700">
+
+              <div className="p-4 bg-white/5 border-t border-white/10 flex items-center justify-between">
+                <div className="flex gap-4">
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Frames Transmitted</span>
+                    <span className="text-sm font-black tabular-nums text-brand-accent">{frameCount.toLocaleString()}</span>
+                  </div>
+                  <div className="w-px h-8 bg-white/10"></div>
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Throughput Rate</span>
+                    <span className="text-sm font-black tabular-nums text-brand-success">{fps} FPS</span>
+                  </div>
+                </div>
+
                 {!isRunning ? (
-                  <button onClick={startStream} className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition">
-                    ▶️ Start Detection
+                  <button onClick={startStream} className="px-8 py-3 bg-brand-accent hover:bg-brand-accent/80 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-lg shadow-brand-accent/20">
+                    Establish Uplink
                   </button>
                 ) : (
-                  <button onClick={stopStream} className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 rounded-lg transition">
-                    ⏹️ Stop Detection
+                  <button onClick={stopStream} className="px-8 py-3 bg-brand-danger hover:bg-brand-danger/80 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-lg shadow-brand-danger/20">
+                    Terminate Link
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Stats bar */}
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: 'Frames Sent', value: frameCount, color: 'text-blue-400' },
-                { label: 'FPS',         value: fps,        color: 'text-green-400' },
-                { label: 'Status',      value: connectionStatus === 'connected' ? '🟢' : '🔴', color: connectionStatus === 'connected' ? 'text-green-400' : 'text-red-400' },
-              ].map(({ label, value, color }) => (
-                <div key={label} className="bg-gray-800 rounded-xl p-4 border border-gray-700">
-                  <p className="text-gray-400 text-sm">{label}</p>
-                  <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* ── ACCIDENT HISTORY ── */}
-            <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-              {/* panel header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700 bg-gray-800/80">
+            {/* Accident History Stack */}
+            <div className="glass-card flex flex-col h-[450px]">
+              <div className="px-6 py-4 border-b border-brand-border/50 bg-white/5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-xl">🚨</span>
-                  <h3 className="font-semibold text-white text-base">Accident History</h3>
+                  <span className="text-brand-danger text-sm">🚨</span>
+                  <h3 className="text-xs font-black uppercase tracking-[0.2em] text-white">Incident History Log</h3>
                   {accidentHistory.length > 0 && (
-                    <span className="bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                    <span className="bg-brand-danger text-white text-[10px] font-black px-2 py-0.5 rounded-full ring-4 ring-brand-danger/20">
                       {accidentHistory.length}
                     </span>
                   )}
@@ -373,258 +397,164 @@ export default function LiveFeed() {
                 {accidentHistory.length > 0 && (
                   <button
                     onClick={() => { setAccidentHistory([]); lastAccidentIdRef.current = null; }}
-                    className="text-xs text-gray-500 hover:text-red-400 transition"
+                    className="text-[10px] font-bold uppercase text-gray-500 hover:text-brand-danger transition"
                   >
-                    Clear all
+                    Wipe Log
                   </button>
                 )}
               </div>
 
-              {/* empty state */}
-              {accidentHistory.length === 0 ? (
-                <div className="py-10 text-center">
-                  <p className="text-4xl mb-2">🛡️</p>
-                  <p className="text-gray-400 text-sm">No accidents detected this session</p>
-                  <p className="text-gray-600 text-xs mt-1">History will appear here as accidents are detected</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-gray-700/60 max-h-96 overflow-y-auto">
-                  {accidentHistory.map((acc, idx) => {
-                    const sc = severityStyle(acc.severity);
-                    const isLatest = idx === 0;
-                    return (
-                      <div
-                        key={`${acc.id ?? 'null'}-${acc.timestamp}`}
-                        className={`px-5 py-4 transition-colors ${isLatest ? sc.bg : 'hover:bg-gray-700/30'}`}
-                      >
-                        {/* row header */}
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {isLatest && (
-                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-300 bg-red-900/70 px-2 py-0.5 rounded-full animate-pulse">
-                                ● LATEST
-                              </span>
-                            )}
-                            <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded text-white ${sc.badge}`}>
-                              {acc.severity}
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+                {accidentHistory.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center opacity-20 grayscale">
+                    <p className="text-6xl mb-4">🛡️</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em]">No Visual Anomalies Detected</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {accidentHistory.map((acc, idx) => {
+                      const sc = severityStyle(acc.severity);
+                      return (
+                        <div key={`${acc.id}-${idx}`} className={`p-5 rounded-2xl border ${sc.border} ${sc.bg} relative group overflow-hidden`}>
+                          <div className="flex justify-between items-start mb-4">
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest text-white ${sc.badge}`}>
+                              {acc.severity} Impact
                             </span>
-                            {acc.id != null && (
-                              <span className="text-xs text-gray-500 font-mono">#{acc.id}</span>
-                            )}
+                            <span className="text-[10px] font-mono text-gray-400 font-bold">{formatTime(acc.timestamp)}</span>
                           </div>
-                          <span className="text-xs text-gray-500 shrink-0">{formatTime(acc.timestamp)}</span>
-                        </div>
 
-                        {/* details */}
-                        <p className="text-sm text-gray-200 flex items-start gap-1 mb-1">
-                          <span className="text-gray-500 mt-0.5">📍</span>
-                          <span className="break-all">{acc.location}</span>
-                        </p>
-                        <p className="text-xs text-gray-400 mb-2">
-                          🚗 {acc.vehicles} vehicle{acc.vehicles !== 1 ? 's' : ''} involved
-                        </p>
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-3">
+                              <span className="text-lg">📍</span>
+                              <p className="text-[11px] font-bold text-gray-200 truncate">{acc.location}</p>
+                            </div>
 
-                        {/* violation tags */}
-                        {acc.violations.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mb-3">
-                            {acc.violations.map((v, vi) => (
-                              <span key={vi} className="text-xs bg-gray-700 text-gray-200 px-2 py-0.5 rounded">
-                                {v.type || v}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Ola Maps top-5 hospitals */}
-                        {acc.olaHospitals && acc.olaHospitals.length > 0 && (
-                          <div className="mt-3">
-                            <p className="text-xs text-gray-400 mb-1.5">🗺️ Nearby Hospitals (Ola Maps)</p>
-                            <ol className="space-y-1.5">
-                              {acc.olaHospitals.map((h) => (
-                                <li key={h.placeId} className="text-xs flex items-start gap-2">
-                                  <span className="shrink-0 bg-green-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold mt-0.5">{h.rank}</span>
-                                  <span>
-                                    <span className="text-white font-medium">{h.name}</span>
-                                    {h.address && <span className="text-gray-500 block leading-tight">{h.address}</span>}
-                                  </span>
-                                </li>
-                              ))}
-                            </ol>
-                          </div>
-                        )}
-
-                        {/* Nearest hospital — dispatched to hospital portal */}
-                        {acc.olaHospitals?.[0] ? (
-                          <div className={`mt-3 p-2.5 rounded-lg border border-green-700 bg-green-950/40 text-xs mb-2`}>
-                            <p className="text-green-400 font-semibold mb-0.5">🏥 Nearest Hospital Dispatched (Ola Maps)</p>
-                            <p className="text-white font-semibold">{acc.olaHospitals[0].name}</p>
-                            {acc.olaHospitals[0].address && (
-                              <p className="text-gray-400 leading-tight">{acc.olaHospitals[0].address}</p>
-                            )}
-                            {acc.dispatchResult ? (
-                              <div className="mt-2 space-y-1">
-                                <p className="text-green-300 font-medium">✅ Alert sent to Hospital Portal</p>
-                                {acc.dispatchResult.distance_km != null && (
-                                  <p className="text-gray-400">
-                                    📏 ~{acc.dispatchResult.distance_km} km · ETA ~{acc.dispatchResult.eta_minutes} min
-                                  </p>
-                                )}
-                                <div className="bg-green-900/60 border border-green-600/40 rounded-lg px-3 py-2 mt-1">
-                                  <p className="text-green-300 text-[11px] mb-0.5">Hospital Portal Login Code:</p>
-                                  <p className="text-green-200 font-mono font-bold text-sm tracking-wider">
-                                    {acc.dispatchResult.hospital_code}
-                                  </p>
-                                  <p className="text-green-500/60 text-[10px] mt-0.5">
-                                    Use at <span className="underline">/hospital-login</span> to manage this request
-                                  </p>
-                                </div>
+                            {/* Nearby Hospitals */}
+                            {acc.olaHospitals?.length > 0 && (
+                              <div className="space-y-1.5 pt-2 border-t border-white/5">
+                                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Medical Hubs Identified</p>
+                                {acc.olaHospitals.slice(0, 3).map((h, i) => (
+                                  <div key={i} className="flex items-center gap-2">
+                                    <div className="w-1 h-1 bg-brand-success rounded-full"></div>
+                                    <p className="text-[10px] font-medium text-gray-400 truncate">{h.name}</p>
+                                  </div>
+                                ))}
                               </div>
-                            ) : (
-                              <p className="text-yellow-400 mt-1">⏳ Dispatching to portal…</p>
+                            )}
+
+                            {/* Dispatch Status */}
+                            {acc.olaHospitals?.[0] && (
+                              <div className="mt-4 p-3 rounded-xl bg-black/40 border border-white/5">
+                                <p className="text-[9px] font-black text-brand-success uppercase tracking-widest mb-1">Target Portal Uplink</p>
+                                {acc.dispatchResult ? (
+                                  <div className="space-y-2">
+                                    <p className="text-[11px] font-black text-white">{acc.dispatchResult.hospital_name}</p>
+                                    <div className="flex items-center justify-between">
+                                      <div className="bg-brand-success/10 text-brand-success text-[14px] font-mono font-black px-3 py-1 rounded-lg border border-brand-success/20">
+                                        {acc.dispatchResult.hospital_code}
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter">Distance / ETA</p>
+                                        <p className="text-[10px] font-black text-gray-300">~{acc.dispatchResult.distance_km}km • {acc.dispatchResult.eta_minutes}m</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-[10px] font-bold text-brand-warning animate-pulse uppercase">Initiating Secure Handshake...</p>
+                                )}
+                              </div>
                             )}
                           </div>
-                        ) : acc.emergency?.selected_hospital ? (
-                          <div className={`mt-3 p-2.5 rounded-lg border ${sc.border} bg-gray-900/60 text-xs mb-2`}>
-                            <p className="text-gray-400 mb-0.5">🏥 Nearest Hospital Dispatched</p>
-                            <p className="text-white font-semibold">{acc.emergency.selected_hospital.name}</p>
-                            <p className={sc.text}>
-                              ~{Number(acc.emergency.selected_hospital.distance_km).toFixed(2)} km
-                              &nbsp;·&nbsp;ETA ~{acc.emergency.selected_hospital.eta_minutes} min
-                            </p>
-                          </div>
-                        ) : null}
 
-                        {/* map link — passes Ola hospitals to map page */}
-                        {acc.accidentLat != null && (
-                          <Link
-                            to={`/map?accidentLat=${acc.accidentLat}&accidentLon=${acc.accidentLon}&olaHospitals=${encodeURIComponent(JSON.stringify(acc.olaHospitals ?? []))}`}
-                            className="inline-block mt-1 text-xs text-blue-400 hover:text-blue-300 underline"
+                          <Link 
+                            to={`/map?accidentLat=${acc.accidentLat}&accidentLon=${acc.accidentLon}`}
+                            className="absolute bottom-4 right-5 text-[10px] font-black text-brand-accent uppercase tracking-widest hover:underline"
                           >
-                            View on map →
+                            Track Site →
                           </Link>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* ── Right column: detection results ── */}
-          <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 self-start">
-            <h3 className="text-lg font-semibold mb-4">📊 Detection Results</h3>
+          {/* ── Intelligence Hub (Right) ── */}
+          <div className="lg:col-span-4 space-y-6">
 
-            {!isRunning ? (
-              <p className="text-gray-400 text-sm">Start detection to see results</p>
-            ) : latestDetection ? (
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm font-semibold text-gray-300 mb-2">Detected Vehicles: {detections.length}</p>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {detections.map((vehicle, idx) => (
-                      <div
-                        key={idx}
-                        className={`p-2 rounded text-sm ${vehicle.violation ? 'bg-red-900 border border-red-700' : 'bg-green-900 border border-green-700'}`}
-                      >
-                        <p className="font-medium">{vehicle.class || `Vehicle ${idx + 1}`}</p>
-                        {vehicle.confidence && (
-                          <p className="text-xs text-gray-300">Confidence: {(vehicle.confidence * 100).toFixed(0)}%</p>
-                        )}
-                        {vehicle.violation && (
-                          <p className="text-xs text-red-300 mt-1">⚠️ {vehicle.violation}</p>
-                        )}
+            {/* Live Telemetry Node */}
+            <div className="glass-card overflow-hidden h-[calc(100vh-200px)] sticky top-28 flex flex-col">
+              <div className="px-6 py-4 border-b border-brand-border/50 bg-white/5">
+                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-brand-accent">Live Telemetry Node</h3>
+              </div>
+
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+                {!isRunning ? (
+                  <div className="h-full flex flex-col items-center justify-center opacity-20 text-center">
+                    <p className="text-4xl mb-4">🛰️</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em]">Awaiting Data Stream</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Object Counter */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 bg-brand-accent/10 border border-brand-accent/20 rounded-2xl text-center">
+                        <p className="text-[9px] font-black text-brand-accent uppercase tracking-widest mb-1">Vehicles</p>
+                        <p className="text-3xl font-black tabular-nums">{detections.length}</p>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                      <div className="p-4 bg-white/5 border border-white/10 rounded-2xl text-center">
+                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Threat Level</p>
+                        <p className={`text-3xl font-black ${detections.some(v => v.violation) ? 'text-brand-danger' : 'text-brand-success'}`}>
+                          {detections.some(v => v.violation) ? 'HI' : 'LO'}
+                        </p>
+                      </div>
+                    </div>
 
-                {latestDetection.violations?.length > 0 && (
-                  <div className="border-t border-gray-700 pt-4">
-                    <p className="text-sm font-semibold text-red-400 mb-2">🚨 Violations: {latestDetection.violations.length}</p>
+                    {/* Detections List */}
                     <div className="space-y-2">
-                      {latestDetection.violations.map((v, idx) => (
-                        <div key={idx} className="p-2 bg-red-900 rounded text-xs">{v.type || v}</div>
-                      ))}
+                      <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest px-1">Detected Assets</p>
+                      <div className="space-y-2">
+                        {detections.map((vehicle, idx) => (
+                          <div
+                            key={idx}
+                            className={`p-3 rounded-xl border flex items-center justify-between group transition-all ${vehicle.violation ? 'bg-brand-danger/10 border-brand-danger/30' : 'bg-white/5 border-white/10'}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="text-lg">{vehicle.class === 'motorcycle' ? '🏍️' : '🚗'}</span>
+                              <div>
+                                <p className="text-[11px] font-black uppercase tracking-tight text-white">{vehicle.class || 'Asset'}</p>
+                                <p className="text-[9px] font-bold text-gray-500 tabular-nums">Conf: {(vehicle.confidence * 100).toFixed(0)}%</p>
+                              </div>
+                            </div>
+                            {vehicle.violation && (
+                              <div className="bg-brand-danger text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter">
+                                {vehicle.violation}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
+              </div>
 
-                {latestDetection.accident && (
-                  <div className="border-t border-yellow-500 pt-4">
-                    <p className="text-lg font-bold text-yellow-400 mb-2">🚨 Collision Detected!</p>
-                    <p className="text-sm text-yellow-300">Severity: {latestDetection.severity}</p>
-                    <p className="text-sm text-yellow-300">Location: {latestDetection.location || 'Unknown'}</p>
-                  </div>
-                )}
-
-                {latestDetection.accident && latestDetection.emergency?.selected_hospital && (
-                  <div className="border-t border-red-600 pt-4 space-y-3">
-                    <p className="text-sm font-bold text-red-300">🏥 Nearest ER</p>
-                    <div className="p-3 bg-red-950/80 rounded border border-red-700">
-                      <p className="font-semibold text-white">{latestDetection.emergency.selected_hospital.name}</p>
-                      <p className="text-xs text-red-200 mt-1">
-                        ~{Number(latestDetection.emergency.selected_hospital.distance_km).toFixed(2)} km · ETA ~{latestDetection.emergency.selected_hospital.eta_minutes} min
-                      </p>
-                      {latestDetection.emergency.selected_hospital.phone && (
-                        <p className="text-xs text-gray-300 mt-1">📞 {latestDetection.emergency.selected_hospital.phone}</p>
-                      )}
-                      <p className="text-xs text-green-400 mt-2">Hospital notified.</p>
-                    </div>
-                    {latestDetection.emergency.accident_lat != null && (
-                      <Link
-                        to={`/map?accidentLat=${latestDetection.emergency.accident_lat}&accidentLon=${latestDetection.emergency.accident_lon}`}
-                        className="inline-block text-sm text-blue-400 hover:text-blue-300 underline"
-                      >
-                        Open map →
-                      </Link>
-                    )}
-                  </div>
-                )}
-
-                {latestDetection.accident && latestDetection.emergency?.message && (
-                  <p className="text-xs text-amber-400 border-t border-amber-700 pt-2">{latestDetection.emergency.message}</p>
-                )}
-                {latestDetection.accident && latestDetection.emergency?.error && (
-                  <p className="text-xs text-red-400">Emergency routing: {latestDetection.emergency.error}</p>
-                )}
-
-                <div className="bg-gray-900 border border-gray-700 rounded p-2 text-xs text-gray-300 max-h-48 overflow-auto">
-                  <strong>Raw output:</strong>
-                  <pre className="whitespace-pre-wrap mt-1">{JSON.stringify(latestDetection, null, 2)}</pre>
+              {/* System Footer Info */}
+              <div className="p-4 bg-black/30 border-t border-brand-border/50">
+                <div className="flex items-center justify-between text-[9px] font-bold uppercase tracking-widest text-gray-600 mb-2">
+                  <span>Logic Core</span>
+                  <span className="text-brand-accent">v2.1.0-Tactical</span>
+                </div>
+                <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                  <div className="h-full bg-brand-accent animate-pulse w-3/4"></div>
                 </div>
               </div>
-            ) : (
-              <p className="text-gray-400 text-sm">Waiting for first frame...</p>
-            )}
-
-            <div className="mt-6 border-t border-gray-700 pt-4 space-y-1">
-              <p className="text-xs text-gray-400">
-                Connection: {connectionStatus === 'connected' ? '🟢 Connected' : '🔴 Disconnected'}
-              </p>
-              <p className="text-xs text-gray-500">
-                Frame rate: every {LIVE_FEED_FRAME_INTERVAL_MS}ms (~{Math.round(1000 / LIVE_FEED_FRAME_INTERVAL_MS)} FPS cap)
-              </p>
-              {latestDetection?.snapshot_path && (
-                <p className="text-xs text-green-400">Snapshot: {latestDetection.snapshot_path}</p>
-              )}
-              {wsDebug && (
-                <pre className="mt-2 text-[10px] text-gray-500 whitespace-pre-wrap break-all max-h-28 overflow-auto bg-gray-900/80 p-2 rounded border border-gray-700">
-                  {JSON.stringify(wsDebug, null, 2)}
-                </pre>
-              )}
             </div>
           </div>
         </div>
-
-        <div className="mt-8 bg-blue-900/60 border border-blue-700 rounded-xl p-4">
-          <p className="text-sm text-blue-200">
-            💡 <strong>How it works:</strong> Frames are streamed over WebSocket at ~{Math.round(1000 / LIVE_FEED_FRAME_INTERVAL_MS)} FPS.
-            The backend saves a DB record &amp; snapshot only when violations or an accident are detected.
-            Accident history accumulates in this session and is cleared when you refresh or click "Clear all".
-          </p>
-        </div>
-      </div>
+      </main>
     </div>
   );
 }

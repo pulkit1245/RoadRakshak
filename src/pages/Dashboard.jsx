@@ -81,14 +81,21 @@ export default function Dashboard() {
           }));
         }
 
-        // Add new violation to list
-        if (data.violation) {
-          setViolations((prev) => [data.violation, ...prev.slice(0, 14)]);
+        // Add new violations to list
+        if (data.violations && Array.isArray(data.violations) && data.violations.length > 0) {
+          setViolations((prev) => [...data.violations, ...prev.slice(0, 14)]);
         }
 
-        // Add new accident to list and show alert
-        if (data.accident) {
-          setAccidents((prev) => [data.accident, ...prev.slice(0, 9)]);
+        // Add new accident to list and show alert (if it has a DB ID)
+        if (data.accident && data.id) {
+          const accidentObj = {
+            id: data.id,
+            timestamp: new Date().toISOString(),
+            location: data.location || 'Unknown',
+            severity: data.severity || 'high',
+            type: 'Collision'
+          };
+          setAccidents((prev) => [accidentObj, ...prev.slice(0, 9)]);
           setHasAccident(true);
           setTimeout(() => setHasAccident(false), 5000); // Hide alert after 5 seconds
         }
@@ -121,188 +128,169 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-brand-dark text-white selection:bg-brand-accent/30">
       {/* Alert Banner */}
       {hasAccident && accidents.length > 0 && (
         <AlertBanner accident={accidents[0]} />
       )}
 
-      {/* Header */}
-      <div className="bg-white shadow sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">🚦 RoadRakshak Dashboard</h1>
-            <p className="text-sm text-gray-600">Real-time Traffic Management System</p>
+      {/* Navigation Bar */}
+      <nav className="sticky top-0 z-50 bg-brand-dark/80 backdrop-blur-xl border-b border-brand-border/50">
+        <div className="max-w-[1600px] mx-auto px-6 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-brand-accent rounded-xl flex items-center justify-center shadow-lg shadow-brand-accent/20">
+              <span className="text-xl">🛡️</span>
+            </div>
+            <div>
+              <h1 className="text-xl font-black tracking-tight uppercase">RoadRakshak <span className="text-brand-accent">2.0</span></h1>
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 bg-brand-success rounded-full animate-pulse"></span>
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Network Secure • System Live</p>
+              </div>
+            </div>
           </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => navigate('/live-feed')}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-medium"
-            >
-              📹 Live Feed
-            </button>
-            <button
-              onClick={() => navigate('/map')}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition text-sm font-medium"
-            >
-              🗺️ Map View
-            </button>
-            <button
-              onClick={() => navigate('/analytics')}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm font-medium"
-            >
-              📊 Analytics
-            </button>
-            <button
-              onClick={() => navigate('/advanced')}
-              className="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition text-sm font-medium"
-            >
-              ⚡ Advanced
-            </button>
-            <button
-              onClick={handleRefresh}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
-            >
-              🔄 Refresh
-            </button>
+          
+          <div className="hidden xl:flex items-center gap-2">
+            {[
+              { label: 'Control Center', path: '/live-feed', icon: '📹', color: 'hover:bg-brand-accent/10 hover:text-brand-accent' },
+              { label: 'Spatial Map',    path: '/map',       icon: '🗺️', color: 'hover:bg-purple-500/10 hover:text-purple-400' },
+              { label: 'Intel Report',   path: '/analytics', icon: '📊', color: 'hover:bg-brand-success/10 hover:text-brand-success' },
+              { label: 'Core Config',    path: '/advanced',  icon: '⚡', color: 'hover:bg-pink-500/10 hover:text-pink-400' },
+            ].map((nav) => (
+              <button
+                key={nav.path}
+                onClick={() => navigate(nav.path)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${nav.color}`}
+              >
+                <span>{nav.icon}</span>
+                {nav.label}
+              </button>
+            ))}
+            <div className="w-px h-6 bg-brand-border/50 mx-2"></div>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-medium"
+              className="px-4 py-2 text-sm font-semibold text-brand-danger hover:bg-brand-danger/10 rounded-xl transition-all"
             >
-              Logout
+              Terminate Session
             </button>
           </div>
         </div>
-      </div>
+      </nav>
 
-      {/* Error Message */}
-      {error && (
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-red-800 text-sm">
-              ⚠️ {error} - Make sure backend is running on http://localhost:8000
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      {/* Main Execution View */}
+      <main className="max-w-[1600px] mx-auto px-6 py-8">
         {loading ? (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            <p className="mt-4 text-gray-600">Loading dashboard...</p>
+          <div className="flex flex-col items-center justify-center py-32">
+            <div className="relative w-20 h-20">
+              <div className="absolute inset-0 border-4 border-brand-accent/20 rounded-full"></div>
+              <div className="absolute inset-0 border-4 border-t-brand-accent rounded-full animate-spin"></div>
+            </div>
+            <p className="mt-6 text-gray-400 font-medium tracking-wide animate-pulse uppercase text-xs">Synchronizing Neural Assets...</p>
           </div>
         ) : (
           <>
-            {/* Stat Cards */}
+            {/* Mission Critical Statistics */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              {/* Frames Processed Card */}
-              <div className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-600 text-sm font-medium">Frames Processed</p>
-                    <p className="text-4xl font-bold text-blue-600 mt-2">
-                      {stats.frames_processed?.toLocaleString() || '0'}
-                    </p>
+              {[
+                { label: 'Throughput',    value: stats.frames_processed, icon: '⚡', desc: 'Frames Processed', color: 'text-brand-accent',  shadow: 'shadow-brand-accent/10' },
+                { label: 'Anomalies',     value: stats.total_violations, icon: '⚠️', desc: 'Traffic Violations', color: 'text-brand-warning', shadow: 'shadow-brand-warning/10' },
+                { label: 'Critical Hits', value: stats.total_accidents,  icon: '🚨', desc: 'Active Incidents',  color: 'text-brand-danger',  shadow: 'shadow-brand-danger/10', border: 'border-l-4 border-brand-danger' },
+                { label: 'Deployments',   value: stats.ambulances_dispatched, icon: '🚑', desc: 'Medical Response', color: 'text-brand-success', shadow: 'shadow-brand-success/10' },
+              ].map((stat) => (
+                <div key={stat.label} className={`glass-card p-6 group hover:scale-[1.02] ${stat.border || ''} ${stat.shadow}`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">{stat.label}</p>
+                    <span className="text-2xl grayscale group-hover:grayscale-0 transition-all duration-500">{stat.icon}</span>
                   </div>
-                  <div className="text-5xl">📹</div>
+                  <p className={`text-4xl font-black ${stat.color} tracking-tight`}>
+                    {(stat.value || 0).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-gray-500 font-medium mt-1">{stat.desc}</p>
                 </div>
-                <p className="text-xs text-gray-500 mt-4">Real-time processing active</p>
-              </div>
-
-              {/* Violations Card */}
-              <div className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-600 text-sm font-medium">Total Violations</p>
-                    <p className="text-4xl font-bold text-yellow-600 mt-2">
-                      {stats.total_violations?.toLocaleString() || '0'}
-                    </p>
-                  </div>
-                  <div className="text-5xl">⚠️</div>
-                </div>
-                <p className="text-xs text-gray-500 mt-4">Traffic rule violations detected</p>
-              </div>
-
-              {/* Accidents Card */}
-              <div className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition border-l-4 border-red-600">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-600 text-sm font-medium">Total Accidents</p>
-                    <p className="text-4xl font-bold text-red-600 mt-2">
-                      {stats.total_accidents?.toLocaleString() || '0'}
-                    </p>
-                  </div>
-                  <div className="text-5xl">🚨</div>
-                </div>
-                <p className="text-xs text-gray-500 mt-4">Critical incidents reported</p>
-              </div>
-
-              {/* Ambulances Dispatched Card */}
-              <div className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-600 text-sm font-medium">Ambulances Dispatched</p>
-                    <p className="text-4xl font-bold text-green-600 mt-2">
-                      {stats.ambulances_dispatched?.toLocaleString() || '0'}
-                    </p>
-                  </div>
-                  <div className="text-5xl">🚑</div>
-                </div>
-                <p className="text-xs text-gray-500 mt-4">Emergency response active</p>
-              </div>
+              ))}
             </div>
 
-            {/* Recent Activity Section */}
+            {/* Tactical Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Violation Log */}
-              <div className="lg:col-span-2">
-                <ViolationLog violations={violations} />
+              {/* Central Intelligence Log */}
+              <div className="lg:col-span-2 glass-card overflow-hidden">
+                <div className="px-6 py-4 border-b border-brand-border/50 bg-white/5 flex items-center justify-between">
+                  <h3 className="text-sm font-bold uppercase tracking-widest text-brand-accent">Live Intelligence Feed</h3>
+                  <button onClick={handleRefresh} className="text-[10px] font-bold uppercase tracking-tighter text-gray-500 hover:text-white transition">Sync Stream</button>
+                </div>
+                <div className="p-0">
+                  <ViolationLog violations={violations} />
+                </div>
               </div>
 
-              {/* Recent Accidents */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">🚨 Recent Accidents</h3>
-                {accidents.length === 0 ? (
-                  <p className="text-gray-600 text-sm">No accidents reported</p>
-                ) : (
-                  <div className="space-y-3 max-h-64 overflow-y-auto">
-                    {accidents.map((accident, idx) => (
-                      <div
-                        key={idx}
-                        className="p-3 bg-red-50 border border-red-200 rounded-lg"
-                      >
-                        <p className="text-sm font-medium text-red-900">
-                          {accident.type || 'Accident Detected'}
-                        </p>
-                        <p className="text-xs text-red-700 mt-1">
-                          {formatTimestamp(accident.timestamp)}
-                        </p>
-                        {accident.location && (
-                          <p className="text-xs text-red-600 mt-1">
-                            📍 {accident.location}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+              {/* Emergency Response Stack */}
+              <div className="glass-card flex flex-col">
+                <div className="px-6 py-4 border-b border-brand-border/50 bg-white/5">
+                  <h3 className="text-sm font-bold uppercase tracking-widest text-brand-danger">Priority Incident Stack</h3>
+                </div>
+                <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
+                  {accidents.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center opacity-30">
+                      <p className="text-4xl mb-4">🛸</p>
+                      <p className="text-xs font-bold uppercase tracking-widest">Airspace Clear</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {accidents.map((accident, idx) => (
+                        <div
+                          key={idx}
+                          className="p-4 bg-brand-danger/10 border border-brand-danger/20 rounded-2xl group hover:bg-brand-danger/20 transition-all cursor-pointer"
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <p className="text-xs font-black text-brand-danger uppercase tracking-tighter">
+                              {accident.type || 'Collision Detected'}
+                            </p>
+                            <span className="text-[10px] font-bold text-gray-500 tabular-nums">
+                              {formatTimestamp(accident.timestamp).split(', ')[1]}
+                            </span>
+                          </div>
+                          {accident.location && (
+                            <div className="flex items-center gap-2 mt-2 opacity-60">
+                              <span className="text-[10px]">📍</span>
+                              <p className="text-[10px] font-semibold truncate">{accident.location}</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="p-4 mt-auto border-t border-brand-border/50">
+                  <button 
+                    onClick={() => navigate('/map')}
+                    className="w-full py-3 bg-brand-danger/20 hover:bg-brand-danger/30 text-brand-danger text-[10px] font-black uppercase tracking-[0.2em] rounded-xl transition-all"
+                  >
+                    Deploy Field Units
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* System Status */}
-            <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-sm text-blue-900">
-                ✅ System Status: <span className="font-semibold">Live Detection Active</span>
-              </p>
-              <p className="text-xs text-blue-700 mt-1">
-                Backend: http://localhost:8000 | Frontend: Connected | WebSocket: {wsRef.current?.readyState === 1 ? '🟢 Connected' : '🔴 Disconnected'}
+            {/* System Telemetry Footer */}
+            <div className="mt-8 flex items-center justify-between px-6 py-4 glass-card border-none bg-brand-accent/5">
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-brand-success rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Core Engine: 2.1.0-PRO</span>
+                </div>
+                <div className="w-px h-4 bg-brand-border/50"></div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Node Status:</span>
+                  <span className="text-[10px] font-black text-brand-accent uppercase">Central Hub Online</span>
+                </div>
+              </div>
+              <p className="text-[10px] font-bold text-gray-600 uppercase tracking-tighter">
+                Session ID: <span className="text-gray-400">{Math.random().toString(36).substring(7).toUpperCase()}</span>
               </p>
             </div>
           </>
         )}
-      </div>
+      </main>
     </div>
   );
 }

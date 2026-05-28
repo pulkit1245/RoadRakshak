@@ -1,52 +1,24 @@
 import cv2
 import numpy as np
+import base64
 from typing import Dict
+import os
+import sys
 
-from .detection import VEHICLE_CLASSES, detect_collisions, process_frame as detect_frame
+# Ensure the root directory is in sys.path so we can import 'agents'
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if root_dir not in sys.path:
+    sys.path.append(root_dir)
 
-
-def enhance_night_vision(frame):
-    lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
-    l, a, b = cv2.split(lab)
-
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-    cl = clahe.apply(l)
-
-    limg = cv2.merge((cl, a, b))
-    return cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
-
-
-def annotate_frame(frame, detections, collisions):
-    annotated = frame.copy()
-    for obj in detections:
-        x1, y1, x2, y2 = map(int, obj["bbox"])
-        label = f"{obj['class']} {obj['confidence']:.2f}"
-        cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(annotated, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-
-    if collisions:
-        cv2.putText(
-            annotated,
-            "🚨 COLLISION ALERT!",
-            (50, 50),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1,
-            (0, 0, 255),
-            3,
-        )
-
-    return annotated
-
-
-def assess_severity(vehicles, accident):
-    if accident:
-        return "high"
-    if vehicles >= 6:
-        return "medium"
-    if vehicles >= 3:
-        return "medium"
-    return "low"
-
+try:
+    from agents.coordinator import AgentCoordinator
+    # Initialize coordinator once (stateless-ish, but carries frame counters)
+    coordinator = AgentCoordinator(skip_frames=1) # Backend main handles its own frame skipping
+    HAS_AGENTS = True
+except ImportError as e:
+    print(f"Warning: Could not import AgentCoordinator: {e}")
+    HAS_AGENTS = False
+    from .detection import VEHICLE_CLASSES, detect_collisions, process_frame as detect_frame
 
 def process_frame(frame: bytes) -> Dict:
     image_array = np.frombuffer(frame, dtype=np.uint8)
@@ -54,43 +26,92 @@ def process_frame(frame: bytes) -> Dict:
     if frame_bgr is None:
         raise ValueError("Unable to decode incoming frame bytes")
 
-    gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
-    if gray.mean() < 80:
-        frame_bgr = enhance_night_vision(frame_bgr)
-
-    detections = detect_frame(frame_bgr)
-    # Pass BGR frame so optical-flow / pixel-delta scene signals in accident_score are non-zero.
-    collisions = detect_collisions(detections, frame_bgr)
-
-    annotated_frame = annotate_frame(frame_bgr, detections, collisions)
-    # JPEG is much faster to encode than PNG for live streaming.
-    _, encoded = cv2.imencode(".jpg", annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
-
-    vehicle_count = sum(1 for d in detections if d["class"] in VEHICLE_CLASSES)
-    accident = bool(collisions)
-    severity = assess_severity(vehicle_count, accident)
-
-    violations = []
-    if collisions:
-        # detect_collisions() returns event dicts: pair, iou, confidence, severity, ...
-        for ev in collisions:
-            obj1, obj2 = ev["pair"]
-            iou_val = ev["iou"]
-            violations.append(
-                {
+    if HAS_AGENTS:
+        # Use the new Multi-Agent architecture
+        result = coordinator.process(frame_bgr)
+        annotated_frame = result["frame"]
+        payload = result["payload"]
+        
+        # Bridge to the frontend's expected format
+        _, encoded = cv2.imencode(".jpg", annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+        
+        # Map violations
+        violations = []
+        for v in payload.get("violations", []):
+            violations.append({
+                "type": v.get("violation", "unknown"),
+                "description": f"Violation detected: {v.get('violation')} (track {v.get('track_id')})"
+            })
+            
+        # Map collisions
+        accident = payload.get("collision", False)
+        if accident:
+            for col in payload.get("collisions", []):
+                violations.append({
                     "type": "collision",
-                    "description": (
-                        f"{obj1['class']} vs {obj2['class']} collision, IoU={iou_val:.2f} "
-                        f"(conf={ev.get('confidence', 0):.2f})"
-                    ),
-                }
-            )
+                    "description": f"Accident detected | Severity: {col.get('severity')} | Confidence: {col.get('confidence', 0):.2f}"
+                })
 
-    return {
-        "vehicles": int(vehicle_count),
-        "violations": violations,
-        "accident": accident,
-        "severity": severity,
-        "annotated_frame": encoded.tobytes(),
-        "snapshot_path": None,
-    }
+        # Map detections for frontend drawing
+        vehicles_list = []
+        for v in payload.get("vehicles", []):
+            vehicles_list.append({
+                "class": v.get("class"),
+                "confidence": v.get("confidence"),
+                "bbox": v.get("bbox"),
+                "track_id": v.get("track_id"),
+                "violation": v.get("violation") # wrong_way, overspeeding, etc.
+            })
+        
+        persons_list = []
+        for p in payload.get("persons", []):
+            persons_list.append({
+                "class": "person",
+                "confidence": p.get("confidence"),
+                "bbox": p.get("bbox"),
+                "track_id": p.get("track_id")
+            })
+
+        return {
+            "vehicles_count": len(payload.get("vehicles", [])),
+            "vehicles": vehicles_list, # Full list for frontend
+            "persons": persons_list,
+            "violations": violations,
+            "accident": accident,
+            "new_accident": payload.get("alert_fired", False), # NEW FLAG
+            "severity": "high" if accident else ("medium" if len(payload.get("vehicles", [])) > 5 else "low"),
+            "annotated_frame": encoded.tobytes(),
+            "snapshot_path": None, # Handled by backend/main.py
+        }
+    else:
+        # Fallback to legacy logic
+        gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+        if gray.mean() < 80:
+            # Simple night vision
+            lab = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2LAB)
+            l, a, b = cv2.split(lab)
+            clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+            frame_bgr = cv2.cvtColor(cv2.merge((clahe.apply(l), a, b)), cv2.COLOR_LAB2BGR)
+
+        detections = detect_frame(frame_bgr)
+        collisions = detect_collisions(detections, frame_bgr)
+
+        # Simple annotation
+        annotated = frame_bgr.copy()
+        for obj in detections:
+            x1, y1, x2, y2 = map(int, obj["bbox"])
+            cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+        _, encoded = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+        
+        vehicle_count = sum(1 for d in detections if d["class"] in VEHICLE_CLASSES)
+        accident = bool(collisions)
+        
+        return {
+            "vehicles": int(vehicle_count),
+            "violations": [],
+            "accident": accident,
+            "severity": "high" if accident else "low",
+            "annotated_frame": encoded.tobytes(),
+            "snapshot_path": None,
+        }

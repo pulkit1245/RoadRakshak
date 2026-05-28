@@ -76,6 +76,22 @@ function AlertCard({ alert, hospitalId, onStatusUpdate }) {
         <p className="text-xs text-slate-600">Incident #{alert.incident_id}</p>
       </div>
 
+      {/* Accident Reference Image */}
+      {alert.snapshot_url && (
+        <div className="px-5 pb-4">
+          <p className="text-[11px] text-slate-500 mb-1.5 uppercase tracking-wide font-semibold">📸 Accident Reference Image</p>
+          <div className="rounded-xl overflow-hidden border border-white/10 bg-black/40">
+            <img
+              src={`${API_BASE}${alert.snapshot_url}`}
+              alt="Accident snapshot"
+              className="w-full h-auto object-contain max-h-64"
+              loading="lazy"
+              onError={(e) => { e.target.style.display = 'none'; }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Action buttons */}
       {isActive && (
         <div className="px-5 pb-4">

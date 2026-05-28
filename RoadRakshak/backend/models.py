@@ -71,6 +71,7 @@ class HospitalAlert(Base):
     vehicles = Column(Integer, default=0, nullable=False)
     distance_km = Column(Float, nullable=True)
     eta_minutes = Column(Integer, nullable=True)
+    snapshot_path = Column(String(512), nullable=True)  # path to accident reference image
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

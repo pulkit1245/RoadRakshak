@@ -203,7 +203,7 @@ async def websocket_endpoint(websocket: WebSocket):
             incident = Incident(
                 location=normalized_location,
                 severity=result.get("severity", "low"),
-                vehicles=int(result.get("vehicles", 0)),
+                vehicles=int(result.get("vehicles_count", 0)),
                 accident=bool(result.get("accident", False)),
                 annotated_frame=annotated_frame,
                 snapshot_path=None,
@@ -218,7 +218,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 incident.violations.append(violation)
 
             # Avoid DB writes for every live frame; persist only meaningful events.
-            if incident.accident or violations:
+            # We only write to DB if this is a BRAND NEW accident or a violation
+            is_new_event = result.get("new_accident", False) or (not incident.accident and violations)
+            
+            if is_new_event:
                 snapshot_path = result.get("snapshot_path")
                 if not snapshot_path:
                     snapshot_path = str(SNAPSHOT_DIR / f"{uuid.uuid4().hex}.png")
@@ -241,7 +244,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
             incident_payload = {
                 "id": incident_id,
-                "vehicles": incident.vehicles,
+                "vehicles": result.get("vehicles", []), # Use the list from process_frame
+                "vehicles_count": incident.vehicles,    # The integer count
+                "persons": result.get("persons", []),
                 "violations": [
                     {"type": v.violation_type, "description": v.description}
                     for v in incident.violations
@@ -251,6 +256,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 "location": normalized_location,
                 "snapshot_path": incident_snapshot_path,
                 "annotated_frame": base64.b64encode(incident_annotated).decode("utf-8") if incident_annotated else None,
+                "stats": {
+                    "frames_processed": frame_index + 1,
+                    "total_accidents": db.query(Incident).filter(Incident.accident == True).count(),
+                    "total_violations": db.query(Violation).count(),
+                    "ambulances_dispatched": db.query(HospitalAlert).count(),
+                }
             }
 
             if incident.accident:
@@ -608,6 +619,7 @@ class OlaDispatchRequest(BaseModel):
     hospital_lon: Optional[float] = None
     accident_lat: Optional[float] = None
     accident_lon: Optional[float] = None
+    snapshot_base64: Optional[str] = None  # base64-encoded JPEG of the accident frame
 
 
 @app.post("/hospital/dispatch-ola")
@@ -618,6 +630,13 @@ async def dispatch_ola_hospital(req: OlaDispatchRequest, db: Session = Depends(g
     Returns the hospital record including its login code.
     """
     import random, string
+    
+    if not req.incident_id:
+        # If no incident ID provided, we can't link the alert properly
+        # but we might still want to register the hospital.
+        # For now, let's require it to ensure data integrity.
+        logger.warning("dispatch-ola: Missing incident_id in request")
+        # Find the latest incident as a fallback? No, better to be explicit.
 
     # Try to find an existing hospital with the same name (exact match)
     existing = db.query(Hospital).filter(
@@ -674,6 +693,31 @@ async def dispatch_ola_hospital(req: OlaDispatchRequest, db: Session = Depends(g
     db.commit()
     db.refresh(ha)
 
+    # Save accident snapshot if provided
+    snap_path = None
+    logger.info("dispatch-ola: snapshot_base64 received=%s (len=%s)",
+                bool(req.snapshot_base64), len(req.snapshot_base64) if req.snapshot_base64 else 0)
+    if req.snapshot_base64:
+        import base64 as b64
+        import time as _time
+        try:
+            snap_dir = os.path.join(os.path.dirname(__file__), "snapshots")
+            os.makedirs(snap_dir, exist_ok=True)
+            raw = req.snapshot_base64
+            if "," in raw:
+                raw = raw.split(",", 1)[1]
+            img_bytes = b64.b64decode(raw)
+            fname = f"alert_{ha.id}_{int(_time.time())}.jpg"
+            snap_path = os.path.join(snap_dir, fname)
+            with open(snap_path, "wb") as f:
+                f.write(img_bytes)
+            ha.snapshot_path = snap_path
+            db.commit()
+            db.refresh(ha)
+            logger.info("Saved alert snapshot: %s (%d bytes)", snap_path, len(img_bytes))
+        except Exception as e:
+            logger.warning("Failed to save snapshot: %s", e)
+
     # Broadcast to connected hospital WS clients
     alert_msg = {
         "type": "new_alert",
@@ -688,6 +732,7 @@ async def dispatch_ola_hospital(req: OlaDispatchRequest, db: Session = Depends(g
             "eta_minutes": ha.eta_minutes,
             "created_at": ha.created_at.isoformat() + "Z",
             "hospital_name": hosp.name,
+            "snapshot_url": f"/hospital/alerts/{ha.id}/snapshot" if ha.snapshot_path else None,
         },
     }
     sockets = hospital_connections.get(hosp.id, set())
@@ -707,7 +752,20 @@ async def dispatch_ola_hospital(req: OlaDispatchRequest, db: Session = Depends(g
         "alert_id": ha.id,
         "distance_km": dist_km,
         "eta_minutes": eta_min,
+        "snapshot_url": f"/hospital/alerts/{ha.id}/snapshot" if ha.snapshot_path else None,
     }
+
+
+@app.get("/hospital/alerts/{alert_id}/snapshot")
+def get_alert_snapshot(alert_id: int, db: Session = Depends(get_db)):
+    """Serve the accident reference image for a hospital alert."""
+    from fastapi.responses import FileResponse
+    ha = db.query(HospitalAlert).filter(HospitalAlert.id == alert_id).first()
+    if not ha or not ha.snapshot_path:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    if not os.path.exists(ha.snapshot_path):
+        raise HTTPException(status_code=404, detail="Snapshot file missing")
+    return FileResponse(ha.snapshot_path, media_type="image/jpeg")
 
 
 
@@ -811,6 +869,7 @@ async def hospital_ws(hospital_id: int, websocket: WebSocket, db: Session = Depe
                     "distance_km": a.distance_km,
                     "eta_minutes": a.eta_minutes,
                     "created_at": a.created_at.isoformat() + "Z",
+                    "snapshot_url": f"/hospital/alerts/{a.id}/snapshot" if a.snapshot_path else None,
                 }
                 for a in recent
             ],

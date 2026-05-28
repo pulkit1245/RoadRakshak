@@ -502,7 +502,7 @@ export const olaMapsAPI = {
    * creates a HospitalAlert, and broadcasts via WebSocket to the hospital portal.
    * Returns { hospital_id, hospital_name, hospital_code, alert_id, distance_km, eta_minutes }
    */
-  dispatchOlaHospital: async ({ incidentId, severity, location, vehicles, hospital, accidentLat, accidentLon }) => {
+  dispatchOlaHospital: async ({ incidentId, severity, location, vehicles, hospital, accidentLat, accidentLon, snapshotBase64 }) => {
     try {
       const res = await fetch(`${API_BASE_URL}/hospital/dispatch-ola`, {
         method: 'POST',
@@ -518,6 +518,7 @@ export const olaMapsAPI = {
           hospital_lon: hospital.lon,
           accident_lat: accidentLat,
           accident_lon: accidentLon,
+          snapshot_base64: snapshotBase64 || null,
         }),
       });
       if (!res.ok) throw new Error(`dispatch-ola HTTP ${res.status}`);
