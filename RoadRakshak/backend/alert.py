@@ -44,9 +44,12 @@ def dispatch_alert(
     if route_meta and route_meta.get("route_source"):
         body += f" | Route: {route_meta['route_source']}"
 
-    client.messages.create(
-        body=body,
-        from_=TWILIO_FROM,
-        to=EMERGENCY_TO,
-    )
-    print("Alert dispatched to emergency contact.")
+    try:
+        client.messages.create(
+            body=body,
+            from_=TWILIO_FROM,
+            to=EMERGENCY_TO,
+        )
+        print("Alert dispatched to emergency contact.")
+    except Exception as e:
+        print(f"Failed to dispatch Twilio alert: {e}")

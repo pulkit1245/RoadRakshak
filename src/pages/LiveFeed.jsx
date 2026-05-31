@@ -1,9 +1,9 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Webcam from 'react-webcam';
+import { motion, AnimatePresence } from 'framer-motion';
 import { websocketAPI, getWebSocketUrl, olaMapsAPI } from '../services/api';
 
-/** Send interval in ms (~1000/this ≈ max send FPS). Backend still runs full CV every 4th frame. */
 const LIVE_FEED_FRAME_INTERVAL_MS = 50;
 
 export default function LiveFeed() {
@@ -17,7 +17,7 @@ export default function LiveFeed() {
   const [isRunning, setIsRunning] = useState(false);
   const [frameCount, setFrameCount] = useState(0);
   const [detections, setDetections] = useState([]);
-  const detectionsRef = useRef([]); // Fix stale closure for canvas drawing
+  const detectionsRef = useRef([]); 
   const [fps, setFps] = useState(0);
   const [latestDetection, setLatestDetection] = useState(null);
   const [error, setError] = useState('');
@@ -27,11 +27,8 @@ export default function LiveFeed() {
   const geoWatchIdRef = useRef(null);
   const userLocationRef = useRef(null);
 
-  // Accident history — running log for this session
   const [accidentHistory, setAccidentHistory] = useState([]);
   const lastAccidentIdRef = useRef(null);
-
-  // Ola Maps: top-5 hospitals nearest to latest accident
   const [olaHospitals, setOlaHospitals] = useState([]);
 
   const startStream = () => {
@@ -77,14 +74,11 @@ export default function LiveFeed() {
         if (data.error) setError(String(data.error));
         setLatestDetection(data);
 
-        // Append accident to history (deduplicate by incident id)
         if (data.accident) {
           const incidentId = data.id;
-          // Only process if it's a NEW incident (has a valid database ID)
           if (incidentId && incidentId !== lastAccidentIdRef.current) {
             lastAccidentIdRef.current = incidentId;
 
-            // Play siren sound 
             try { 
               const audioEl = document.getElementById('siren-audio');
               if (audioEl) {
@@ -93,11 +87,9 @@ export default function LiveFeed() {
               }
             } catch (e) { console.error(e); }
 
-            // Coordinates for Ola Maps lookup
             const accLat = data.emergency?.accident_lat ?? userLocationRef.current?.lat ?? null;
             const accLon = data.emergency?.accident_lon ?? userLocationRef.current?.lon ?? null;
 
-            // Non-blocking Ola Maps request
             const olaFetch = (accLat != null && accLon != null)
               ? olaMapsAPI.getNearbyHospitals(accLat, accLon)
               : Promise.resolve([]);
@@ -105,7 +97,6 @@ export default function LiveFeed() {
             olaFetch.then((hospitals) => {
               setOlaHospitals(hospitals);
 
-              // Set history immediately (dispatchResult will be patched in below)
               const historyEntry = {
                 id: incidentId,
                 timestamp: new Date().toISOString(),
@@ -124,7 +115,6 @@ export default function LiveFeed() {
                 [historyEntry, ...prev].slice(0, 50)
               );
 
-              // Auto-dispatch the #1 nearest Ola hospital to the backend
               if (hospitals.length > 0) {
                 olaMapsAPI.dispatchOlaHospital({
                   incidentId: incidentId,
@@ -137,7 +127,6 @@ export default function LiveFeed() {
                   snapshotBase64: data.annotated_frame || null,
                 }).then((result) => {
                   if (result) {
-                    // Patch the dispatch result into the existing history entry
                     setAccidentHistory((prev) =>
                       prev.map((entry) =>
                         entry.id === incidentId && entry.timestamp === historyEntry.timestamp
@@ -267,9 +256,9 @@ export default function LiveFeed() {
 
   const severityStyle = (sev) => {
     switch ((sev || '').toLowerCase()) {
-      case 'high':   return { badge: 'bg-red-600',    text: 'text-red-400',    border: 'border-red-700',    bg: 'bg-red-950/40' };
-      case 'medium': return { badge: 'bg-orange-600', text: 'text-orange-400', border: 'border-orange-700', bg: 'bg-orange-950/30' };
-      default:       return { badge: 'bg-yellow-600', text: 'text-yellow-400', border: 'border-yellow-700', bg: 'bg-yellow-950/20' };
+      case 'high':   return { badge: 'bg-brand-danger', text: 'text-brand-danger', glow: 'glow-border-danger', bg: 'bg-brand-danger/10' };
+      case 'medium': return { badge: 'bg-brand-warning', text: 'text-brand-warning', glow: 'glow-border-warning', bg: 'bg-brand-warning/10' };
+      default:       return { badge: 'bg-brand-accent', text: 'text-brand-accent', glow: 'glow-border-accent', bg: 'bg-brand-accent/10' };
     }
   };
 
@@ -277,21 +266,24 @@ export default function LiveFeed() {
     new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   return (
-    <div className="min-h-screen bg-brand-dark text-white font-sans selection:bg-brand-accent/30">
+    <div className="min-h-screen bg-brand-dark text-white font-sans selection:bg-brand-accent/30 relative">
+      <div className="bg-orb bg-orb-blue"></div>
+      <div className="bg-orb bg-orb-purple"></div>
+
       <audio id="siren-audio" src="/preview1.mp3" preload="auto" />
 
       {/* Tactical Header */}
-      <nav className="sticky top-0 z-50 bg-brand-dark/80 backdrop-blur-xl border-b border-brand-border/50">
-        <div className="max-w-[1600px] mx-auto px-6 py-4 flex justify-between items-center">
+      <nav className="glass-panel sticky top-0 z-[500] border-0 border-b border-brand-border/40" style={{ borderRadius: 0 }}>
+        <div className="max-w-[1600px] mx-auto px-6 py-3.5 flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-brand-accent rounded-xl flex items-center justify-center shadow-lg shadow-brand-accent/20">
+            <div className="w-10 h-10 bg-brand-accent/15 rounded-xl flex items-center justify-center border border-brand-accent/20 shadow-glow-blue">
               <span className="text-xl">📹</span>
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-tight uppercase">Control <span className="text-brand-accent">Center</span></h1>
+              <h1 className="text-lg font-bold tracking-tight uppercase">Control <span className="text-brand-accent">Center</span></h1>
               <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${connectionStatus === 'connected' ? 'bg-brand-success animate-pulse' : 'bg-brand-danger'}`}></span>
-                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
+                <span className={`w-1.5 h-1.5 rounded-full ${connectionStatus === 'connected' ? 'bg-brand-success animate-pulse-glow shadow-glow-green' : 'bg-brand-danger shadow-glow-red'}`}></span>
+                <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-widest">
                   {connectionStatus === 'connected' ? 'Uplink Established' : 'Signal Lost'} • Remote Node: 127.0.0.1
                 </p>
               </div>
@@ -300,7 +292,7 @@ export default function LiveFeed() {
 
           <button
             onClick={() => navigate('/dashboard')}
-            className="flex items-center gap-2 px-6 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+            className="nav-link-3d"
           >
             <span>←</span> Return to Dashboard
           </button>
@@ -308,23 +300,23 @@ export default function LiveFeed() {
       </nav>
 
       {error && (
-        <div className="max-w-[1600px] mx-auto px-6 py-4">
-          <div className="bg-brand-danger/10 border border-brand-danger/30 rounded-xl p-4 flex items-center gap-3">
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="max-w-[1600px] mx-auto px-6 py-4 relative z-10">
+          <div className="glass-panel glow-border-danger p-4 flex items-center gap-3" style={{ background: 'rgba(239,68,68,0.08)' }}>
             <span className="text-brand-danger">⚠️</span>
             <p className="text-brand-danger text-[10px] font-bold uppercase tracking-widest">System Alert: {error}</p>
           </div>
-        </div>
+        </motion.div>
       )}
 
-      <main className="max-w-[1600px] mx-auto px-6 py-8">
+      <main className="max-w-[1600px] mx-auto px-6 py-8 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
           {/* ── Visual Feed & Telemetry (Left) ── */}
           <div className="lg:col-span-8 space-y-6">
 
             {/* Main Visual Node */}
-            <div className="glass-card overflow-hidden border-none ring-1 ring-white/10">
-              <div className="relative aspect-video bg-black group">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="card-3d overflow-hidden border-brand-border/60">
+              <div className="relative aspect-video bg-black group" style={{ boxShadow: 'inset 0 0 40px rgba(0,0,0,0.8)' }}>
                 {isRunning ? (
                   <>
                     <Webcam
@@ -341,23 +333,24 @@ export default function LiveFeed() {
                       style={{ mixBlendMode: 'screen' }}
                     />
                     {/* HUD Overlay */}
-                    <div className="absolute inset-0 pointer-events-none border-[20px] border-transparent border-t-white/5 border-b-white/5"></div>
+                    <div className="absolute inset-0 pointer-events-none border-[20px] border-transparent border-t-white/5 border-b-white/5 shadow-[inset_0_0_100px_rgba(0,0,0,0.5)]"></div>
+                    <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-20 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:100%_4px]"></div>
                     <div className="absolute top-6 left-6 flex flex-col gap-1">
-                      <div className="bg-brand-accent px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest">Live Stream</div>
-                      <div className="bg-black/50 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-mono text-gray-300">REC: {new Date().toISOString().split('T')[1].split('.')[0]}</div>
+                      <div className="bg-brand-accent px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest shadow-glow-blue text-white">Live Stream</div>
+                      <div className="glass-panel border-0 px-2 py-0.5 rounded text-[10px] font-mono text-gray-300">REC: {new Date().toISOString().split('T')[1].split('.')[0]}</div>
                     </div>
                   </>
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center bg-brand-dark">
-                    <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-6 border border-white/10">
+                    <motion.div animate={{ y: [0, -10, 0] }} transition={{ duration: 4, repeat: Infinity }} className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-6 border border-white/10 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
                       <span className="text-4xl opacity-50">📹</span>
-                    </div>
+                    </motion.div>
                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500">Node Standby • Waiting for Uplink</p>
                   </div>
                 )}
               </div>
 
-              <div className="p-4 bg-white/5 border-t border-white/10 flex items-center justify-between">
+              <div className="p-4 glass-panel border-0 border-t border-white/10 flex items-center justify-between rounded-none" style={{ background: 'rgba(255,255,255,0.02)' }}>
                 <div className="flex gap-4">
                   <div className="flex flex-col">
                     <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Frames Transmitted</span>
@@ -371,25 +364,25 @@ export default function LiveFeed() {
                 </div>
 
                 {!isRunning ? (
-                  <button onClick={startStream} className="px-8 py-3 bg-brand-accent hover:bg-brand-accent/80 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-lg shadow-brand-accent/20">
+                  <button onClick={startStream} className="btn-3d-accent text-[10px] font-black uppercase tracking-[0.2em]">
                     Establish Uplink
                   </button>
                 ) : (
-                  <button onClick={stopStream} className="px-8 py-3 bg-brand-danger hover:bg-brand-danger/80 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl transition-all shadow-lg shadow-brand-danger/20">
+                  <button onClick={stopStream} className="btn-3d-danger text-[10px] font-black uppercase tracking-[0.2em]">
                     Terminate Link
                   </button>
                 )}
               </div>
-            </div>
+            </motion.div>
 
             {/* Accident History Stack */}
-            <div className="glass-card flex flex-col h-[450px]">
-              <div className="px-6 py-4 border-b border-brand-border/50 bg-white/5 flex items-center justify-between">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="card-3d flex flex-col h-[450px]">
+              <div className="px-6 py-4 border-b border-brand-border/50 glass-panel rounded-none border-0 flex items-center justify-between" style={{ background: 'rgba(255,255,255,0.02)' }}>
                 <div className="flex items-center gap-3">
                   <span className="text-brand-danger text-sm">🚨</span>
                   <h3 className="text-xs font-black uppercase tracking-[0.2em] text-white">Incident History Log</h3>
                   {accidentHistory.length > 0 && (
-                    <span className="bg-brand-danger text-white text-[10px] font-black px-2 py-0.5 rounded-full ring-4 ring-brand-danger/20">
+                    <span className="bg-brand-danger text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-glow-red">
                       {accidentHistory.length}
                     </span>
                   )}
@@ -407,106 +400,113 @@ export default function LiveFeed() {
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                 {accidentHistory.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center opacity-20 grayscale">
-                    <p className="text-6xl mb-4">🛡️</p>
+                    <motion.p animate={{ y: [0, -5, 0] }} transition={{ duration: 3, repeat: Infinity }} className="text-6xl mb-4">🛡️</motion.p>
                     <p className="text-[10px] font-black uppercase tracking-[0.3em]">No Visual Anomalies Detected</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {accidentHistory.map((acc, idx) => {
-                      const sc = severityStyle(acc.severity);
-                      return (
-                        <div key={`${acc.id}-${idx}`} className={`p-5 rounded-2xl border ${sc.border} ${sc.bg} relative group overflow-hidden`}>
-                          <div className="flex justify-between items-start mb-4">
-                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest text-white ${sc.badge}`}>
-                              {acc.severity} Impact
-                            </span>
-                            <span className="text-[10px] font-mono text-gray-400 font-bold">{formatTime(acc.timestamp)}</span>
-                          </div>
-
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-3">
-                              <span className="text-lg">📍</span>
-                              <p className="text-[11px] font-bold text-gray-200 truncate">{acc.location}</p>
+                    <AnimatePresence>
+                      {accidentHistory.map((acc, idx) => {
+                        const sc = severityStyle(acc.severity);
+                        return (
+                          <motion.div 
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            key={`${acc.id}-${idx}`} 
+                            className={`card-3d p-5 relative group overflow-hidden ${sc.glow}`}
+                            style={{ background: 'rgba(17,24,39,0.8)' }}
+                          >
+                            <div className="flex justify-between items-start mb-4">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest text-white ${sc.badge} shadow-md`}>
+                                {acc.severity} Impact
+                              </span>
+                              <span className="text-[10px] font-mono text-gray-400 font-bold">{formatTime(acc.timestamp)}</span>
                             </div>
 
-                            {/* Nearby Hospitals */}
-                            {acc.olaHospitals?.length > 0 && (
-                              <div className="space-y-1.5 pt-2 border-t border-white/5">
-                                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Medical Hubs Identified</p>
-                                {acc.olaHospitals.slice(0, 3).map((h, i) => (
-                                  <div key={i} className="flex items-center gap-2">
-                                    <div className="w-1 h-1 bg-brand-success rounded-full"></div>
-                                    <p className="text-[10px] font-medium text-gray-400 truncate">{h.name}</p>
-                                  </div>
-                                ))}
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-3">
+                                <span className="text-lg">📍</span>
+                                <p className="text-[11px] font-bold text-gray-200 truncate">{acc.location}</p>
                               </div>
-                            )}
 
-                            {/* Dispatch Status */}
-                            {acc.olaHospitals?.[0] && (
-                              <div className="mt-4 p-3 rounded-xl bg-black/40 border border-white/5">
-                                <p className="text-[9px] font-black text-brand-success uppercase tracking-widest mb-1">Target Portal Uplink</p>
-                                {acc.dispatchResult ? (
-                                  <div className="space-y-2">
-                                    <p className="text-[11px] font-black text-white">{acc.dispatchResult.hospital_name}</p>
-                                    <div className="flex items-center justify-between">
-                                      <div className="bg-brand-success/10 text-brand-success text-[14px] font-mono font-black px-3 py-1 rounded-lg border border-brand-success/20">
-                                        {acc.dispatchResult.hospital_code}
-                                      </div>
-                                      <div className="text-right">
-                                        <p className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter">Distance / ETA</p>
-                                        <p className="text-[10px] font-black text-gray-300">~{acc.dispatchResult.distance_km}km • {acc.dispatchResult.eta_minutes}m</p>
+                              {acc.olaHospitals?.length > 0 && (
+                                <div className="space-y-1.5 pt-2 border-t border-white/5">
+                                  <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Medical Hubs Identified</p>
+                                  {acc.olaHospitals.slice(0, 3).map((h, i) => (
+                                    <div key={i} className="flex items-center gap-2">
+                                      <div className="w-1.5 h-1.5 bg-brand-success rounded-full shadow-glow-green"></div>
+                                      <p className="text-[10px] font-medium text-gray-400 truncate">{h.name}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {acc.olaHospitals?.[0] && (
+                                <div className="mt-4 p-3 rounded-xl bg-black/40 border border-white/5 shadow-inner">
+                                  <p className="text-[9px] font-black text-brand-success uppercase tracking-widest mb-1">Target Portal Uplink</p>
+                                  {acc.dispatchResult ? (
+                                    <div className="space-y-2">
+                                      <p className="text-[11px] font-black text-white">{acc.dispatchResult.hospital_name}</p>
+                                      <div className="flex items-center justify-between">
+                                        <div className="glass-panel border-brand-success/20 text-brand-success text-[14px] font-mono font-black px-3 py-1 bg-brand-success/10">
+                                          {acc.dispatchResult.hospital_code}
+                                        </div>
+                                        <div className="text-right">
+                                          <p className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter">Distance / ETA</p>
+                                          <p className="text-[10px] font-black text-gray-300">~{acc.dispatchResult.distance_km}km • {acc.dispatchResult.eta_minutes}m</p>
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
-                                ) : (
-                                  <p className="text-[10px] font-bold text-brand-warning animate-pulse uppercase">Initiating Secure Handshake...</p>
-                                )}
-                              </div>
-                            )}
-                          </div>
+                                  ) : (
+                                    <p className="text-[10px] font-bold text-brand-warning animate-pulse-glow uppercase">Initiating Secure Handshake...</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
 
-                          <Link 
-                            to={`/map?accidentLat=${acc.accidentLat}&accidentLon=${acc.accidentLon}`}
-                            className="absolute bottom-4 right-5 text-[10px] font-black text-brand-accent uppercase tracking-widest hover:underline"
-                          >
-                            Track Site →
-                          </Link>
-                        </div>
-                      );
-                    })}
+                            <Link 
+                              to={`/map?accidentLat=${acc.accidentLat}&accidentLon=${acc.accidentLon}`}
+                              className="absolute bottom-4 right-5 text-[10px] font-black text-brand-accent uppercase tracking-widest hover:underline"
+                            >
+                              Track Site →
+                            </Link>
+                          </motion.div>
+                        );
+                      })}
+                    </AnimatePresence>
                   </div>
                 )}
               </div>
-            </div>
+            </motion.div>
           </div>
 
           {/* ── Intelligence Hub (Right) ── */}
           <div className="lg:col-span-4 space-y-6">
 
             {/* Live Telemetry Node */}
-            <div className="glass-card overflow-hidden h-[calc(100vh-200px)] sticky top-28 flex flex-col">
-              <div className="px-6 py-4 border-b border-brand-border/50 bg-white/5">
+            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }} className="glass-panel h-[calc(100vh-200px)] sticky top-28 flex flex-col">
+              <div className="px-6 py-4 border-b border-white/10 bg-white/5">
                 <h3 className="text-xs font-black uppercase tracking-[0.2em] text-brand-accent">Live Telemetry Node</h3>
               </div>
 
               <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                 {!isRunning ? (
                   <div className="h-full flex flex-col items-center justify-center opacity-20 text-center">
-                    <p className="text-4xl mb-4">🛰️</p>
+                    <motion.p animate={{ y: [0, -5, 0] }} transition={{ duration: 4, repeat: Infinity }} className="text-4xl mb-4">🛰️</motion.p>
                     <p className="text-[10px] font-black uppercase tracking-[0.2em]">Awaiting Data Stream</p>
                   </div>
                 ) : (
                   <div className="space-y-6">
                     {/* Object Counter */}
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="p-4 bg-brand-accent/10 border border-brand-accent/20 rounded-2xl text-center">
+                      <div className="card-3d p-4 text-center glow-border-accent" style={{ background: 'rgba(59,130,246,0.05)' }}>
                         <p className="text-[9px] font-black text-brand-accent uppercase tracking-widest mb-1">Vehicles</p>
                         <p className="text-3xl font-black tabular-nums">{detections.length}</p>
                       </div>
-                      <div className="p-4 bg-white/5 border border-white/10 rounded-2xl text-center">
+                      <div className="card-3d p-4 text-center" style={{ background: 'rgba(255,255,255,0.02)' }}>
                         <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Threat Level</p>
-                        <p className={`text-3xl font-black ${detections.some(v => v.violation) ? 'text-brand-danger' : 'text-brand-success'}`}>
+                        <p className={`text-3xl font-black ${detections.some(v => v.violation) ? 'text-brand-danger glow-text-red' : 'text-brand-success'}`}>
                           {detections.some(v => v.violation) ? 'HI' : 'LO'}
                         </p>
                       </div>
@@ -516,42 +516,46 @@ export default function LiveFeed() {
                     <div className="space-y-2">
                       <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest px-1">Detected Assets</p>
                       <div className="space-y-2">
-                        {detections.map((vehicle, idx) => (
-                          <div
-                            key={idx}
-                            className={`p-3 rounded-xl border flex items-center justify-between group transition-all ${vehicle.violation ? 'bg-brand-danger/10 border-brand-danger/30' : 'bg-white/5 border-white/10'}`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className="text-lg">{vehicle.class === 'motorcycle' ? '🏍️' : '🚗'}</span>
-                              <div>
-                                <p className="text-[11px] font-black uppercase tracking-tight text-white">{vehicle.class || 'Asset'}</p>
-                                <p className="text-[9px] font-bold text-gray-500 tabular-nums">Conf: {(vehicle.confidence * 100).toFixed(0)}%</p>
+                        <AnimatePresence>
+                          {detections.map((vehicle, idx) => (
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.95 }}
+                              key={idx}
+                              className={`p-3 card-3d flex items-center justify-between group transition-all ${vehicle.violation ? 'glow-border-danger bg-brand-danger/5' : 'bg-white/5 border-white/10'}`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className="text-lg">{vehicle.class === 'motorcycle' ? '🏍️' : '🚗'}</span>
+                                <div>
+                                  <p className="text-[11px] font-black uppercase tracking-tight text-white">{vehicle.class || 'Asset'}</p>
+                                  <p className="text-[9px] font-bold text-gray-500 tabular-nums">Conf: {(vehicle.confidence * 100).toFixed(0)}%</p>
+                                </div>
                               </div>
-                            </div>
-                            {vehicle.violation && (
-                              <div className="bg-brand-danger text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter">
-                                {vehicle.violation}
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                              {vehicle.violation && (
+                                <div className="bg-brand-danger text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter shadow-glow-red">
+                                  {vehicle.violation}
+                                </div>
+                              )}
+                            </motion.div>
+                          ))}
+                        </AnimatePresence>
                       </div>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* System Footer Info */}
-              <div className="p-4 bg-black/30 border-t border-brand-border/50">
-                <div className="flex items-center justify-between text-[9px] font-bold uppercase tracking-widest text-gray-600 mb-2">
+              <div className="p-4 bg-black/40 border-t border-white/10">
+                <div className="flex items-center justify-between text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-2">
                   <span>Logic Core</span>
                   <span className="text-brand-accent">v2.1.0-Tactical</span>
                 </div>
-                <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                  <div className="h-full bg-brand-accent animate-pulse w-3/4"></div>
+                <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden shadow-inner">
+                  <div className="h-full bg-brand-accent animate-pulse w-3/4 shadow-glow-blue"></div>
                 </div>
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </main>

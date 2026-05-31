@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { authAPI } from '../services/api';
 
 export default function Login() {
@@ -16,9 +17,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // Call the backend login endpoint
       await authAPI.login(email, password);
-      // On success, redirect to dashboard based on role
       if (role === 'hospital' || role === 'ambulance') {
         navigate('/hospital-dashboard');
       } else {
@@ -31,59 +30,77 @@ export default function Login() {
     }
   };
 
+  const roles = [
+    { id: 'hospital',  label: 'Hospital Staff',   icon: '🏥' },
+    { id: 'ambulance', label: 'Ambulance Staff',   icon: '🚑' },
+    { id: 'other',     label: 'Admin / Other',     icon: '🛡️' },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-brand-dark flex items-center justify-center px-4 relative overflow-hidden">
+      {/* Animated Background Orbs */}
+      <div className="bg-orb bg-orb-blue"></div>
+      <div className="bg-orb bg-orb-purple"></div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full max-w-md relative z-10"
+      >
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">🚦 RoadRakshak</h1>
-          <p className="text-gray-600">AI-Powered Traffic Management System</p>
+          <motion.div
+            animate={{ y: [0, -8, 0] }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-brand-accent/15 border border-brand-accent/20 mb-5 shadow-glow-blue"
+          >
+            <span className="text-3xl">🛡️</span>
+          </motion.div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">RoadRakshak <span className="text-brand-accent">2.0</span></h1>
+          <p className="text-sm text-gray-500 mt-1.5 font-medium">AI-Powered Traffic Management System</p>
         </div>
 
         {/* Login Card */}
-        <div className="bg-white rounded-lg shadow-xl p-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Sign In</h2>
+        <div className="card-3d p-8">
+          <h2 className="text-lg font-bold text-white mb-6">Sign In</h2>
 
           {/* Error Message */}
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-red-800 text-sm font-medium">{error}</p>
-            </div>
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 p-3.5 rounded-xl glow-border-danger"
+              style={{ background: 'rgba(239,68,68,0.08)' }}
+            >
+              <p className="text-brand-danger text-xs font-semibold">{error}</p>
+            </motion.div>
           )}
 
           {/* Role Selection */}
-          <div className="mb-6 flex justify-center gap-2">
-            <button
-              type="button"
-              className={`px-4 py-2 rounded-lg font-semibold border transition-colors duration-200 ${role === 'hospital' ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-blue-700 border-blue-300'}`}
-              onClick={() => setRole('hospital')}
-              disabled={loading}
-            >
-              Hospital Staff
-            </button>
-            <button
-              type="button"
-              className={`px-4 py-2 rounded-lg font-semibold border transition-colors duration-200 ${role === 'ambulance' ? 'bg-green-600 text-white border-green-700' : 'bg-white text-green-700 border-green-300'}`}
-              onClick={() => setRole('ambulance')}
-              disabled={loading}
-            >
-              Ambulance Staff
-            </button>
-            <button
-              type="button"
-              className={`px-4 py-2 rounded-lg font-semibold border transition-colors duration-200 ${role === 'other' ? 'bg-gray-700 text-white border-gray-800' : 'bg-white text-gray-700 border-gray-300'}`}
-              onClick={() => setRole('other')}
-              disabled={loading}
-            >
-              Other
-            </button>
+          <div className="mb-6 flex gap-2">
+            {roles.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => setRole(r.id)}
+                disabled={loading}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-300 border ${
+                  role === r.id
+                    ? 'bg-brand-accent/12 border-brand-accent/30 text-brand-accent shadow-glow-blue'
+                    : 'bg-white/3 border-white/8 text-gray-400 hover:bg-white/5 hover:text-gray-300'
+                }`}
+              >
+                <span className="text-sm">{r.icon}</span>
+                {r.label}
+              </button>
+            ))}
           </div>
 
           {/* Login Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email Field */}
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="email" className="block text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">
                 Email Address
               </label>
               <input
@@ -94,13 +111,12 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={loading}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="input-3d disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
-            {/* Password Field */}
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="password" className="block text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">
                 Password
               </label>
               <input
@@ -111,49 +127,56 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="input-3d disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
-            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-6 bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200"
+              className="w-full mt-2 btn-3d-accent py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                  Signing in...
+                </span>
+              ) : 'Sign In'}
             </button>
           </form>
 
-          {/* Demo Credentials Info */}
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-900 font-medium mb-1">Demo Credentials:</p>
-            <p className="text-sm text-blue-800">Email: judge@test.com</p>
-            <p className="text-sm text-blue-800">Password: password123</p>
+          {/* Demo Credentials */}
+          <div className="mt-6 p-4 rounded-xl glow-border-accent" style={{ background: 'rgba(59,130,246,0.05)' }}>
+            <p className="text-xs text-brand-accent font-semibold mb-1.5">Demo Credentials</p>
+            <p className="text-xs text-gray-400">Email: <span className="text-gray-300 font-mono">judge@test.com</span></p>
+            <p className="text-xs text-gray-400">Password: <span className="text-gray-300 font-mono">password123</span></p>
           </div>
 
-          {/* Dev Mode - Skip Login */}
+          {/* Dev Mode */}
           <button
             onClick={() => {
               localStorage.setItem('authToken', 'dev-test-token');
               navigate('/dashboard');
             }}
-            className="w-full mt-4 bg-gray-600 text-white font-semibold py-2 rounded-lg hover:bg-gray-700 transition-colors duration-200 text-sm"
+            className="w-full mt-4 btn-3d bg-white/5 text-gray-400 hover:text-white text-xs py-2.5"
           >
-            🛠️ Dev Mode: Skip Login (for testing)
+            🛠️ Dev Mode: Skip Login
           </button>
 
           {/* Footer */}
-          <p className="text-center text-gray-600 text-sm mt-6">
-            🔐 Your credentials are secure and transmitted over HTTPS
+          <p className="text-center text-gray-600 text-xs mt-5 flex items-center justify-center gap-1.5">
+            <span className="w-1.5 h-1.5 bg-brand-success rounded-full"></span>
+            Secure connection established
           </p>
         </div>
 
         {/* System Status */}
-        <div className="mt-6 text-center text-gray-600 text-sm">
-          <p>Backend: <span className="text-green-600 font-semibold">http://localhost:8000</span></p>
+        <div className="mt-5 text-center">
+          <p className="text-[10px] text-gray-600 font-medium">
+            Backend: <span className="text-brand-success font-semibold">http://localhost:8000</span>
+          </p>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

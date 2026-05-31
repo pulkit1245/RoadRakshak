@@ -31,58 +31,66 @@ export default function SeverityBadge({ level = 'MEDIUM', vehicleCount = 0, pede
 
   const severityConfig = {
     HIGH: {
-      color: 'bg-red-100',
-      textColor: 'text-red-800',
-      borderColor: 'border-red-300',
-      icon: '🔴',
+      color: 'bg-brand-danger/10',
+      textColor: 'text-brand-danger',
+      borderColor: 'border-brand-danger/30',
+      glow: 'glow-border-danger',
+      icon: '🚨',
       label: 'HIGH SEVERITY',
       description: 'Critical incident - immediate response required',
+      animation: 'animate-pulse',
     },
     MEDIUM: {
-      color: 'bg-yellow-100',
-      textColor: 'text-yellow-800',
-      borderColor: 'border-yellow-300',
-      icon: '🟡',
+      color: 'bg-brand-warning/10',
+      textColor: 'text-brand-warning',
+      borderColor: 'border-brand-warning/30',
+      glow: 'glow-border-warning',
+      icon: '⚠️',
       label: 'MEDIUM SEVERITY',
       description: 'Moderate incident - standard response',
+      animation: '',
     },
     LOW: {
-      color: 'bg-green-100',
-      textColor: 'text-green-800',
-      borderColor: 'border-green-300',
-      icon: '🟢',
+      color: 'bg-brand-success/10',
+      textColor: 'text-brand-success',
+      borderColor: 'border-brand-success/30',
+      glow: 'glow-border-success',
+      icon: 'ℹ️',
       label: 'LOW SEVERITY',
       description: 'Minor incident - monitoring',
+      animation: '',
     },
   };
 
   const config = severityConfig[severity];
 
   return (
-    <div className={`${config.color} border-2 ${config.borderColor} rounded-lg p-3`}>
+    <div className={`card-3d p-4 ${config.glow}`} style={{ background: 'rgba(17,24,39,0.8)' }}>
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">{config.icon}</span>
+        <div className="flex items-center gap-3">
+          <div className={`w-8 h-8 rounded-lg ${config.color} border border-transparent flex items-center justify-center`}>
+            <span className={`text-xl ${config.animation}`}>{config.icon}</span>
+          </div>
           <div>
-            <p className={`font-bold ${config.textColor}`}>{config.label}</p>
-            <p className={`text-xs ${config.textColor} opacity-75`}>{config.description}</p>
+            <p className={`font-black text-[11px] uppercase tracking-widest ${config.textColor}`}>{config.label}</p>
+            <p className={`text-[10px] text-gray-400 mt-0.5`}>{config.description}</p>
           </div>
         </div>
       </div>
 
       {/* Risk Score */}
-      <div className="mt-2 text-xs">
-        <div className="flex items-center gap-2 mb-1">
-          <span className={config.textColor}>Vehicles:</span>
-          <span className="font-semibold">{vehicleCount}</span>
+      <div className="mt-3 pt-3 border-t border-white/5 text-[10px] grid grid-cols-3 gap-2">
+        <div className="flex flex-col gap-1">
+          <span className="text-gray-500 font-bold uppercase tracking-wider">Vehicles</span>
+          <span className="font-mono text-white text-xs">{vehicleCount}</span>
         </div>
-        <div className="flex items-center gap-2 mb-1">
-          <span className={config.textColor}>Pedestrians:</span>
-          <span className="font-semibold">{pedestrianCount}</span>
+        <div className="flex flex-col gap-1">
+          <span className="text-gray-500 font-bold uppercase tracking-wider">Pedestrians</span>
+          <span className="font-mono text-white text-xs">{pedestrianCount}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className={config.textColor}>Speed:</span>
-          <span className="font-semibold">{speed} km/h</span>
+        <div className="flex flex-col gap-1">
+          <span className="text-gray-500 font-bold uppercase tracking-wider">Speed</span>
+          <span className="font-mono text-white text-xs">{speed} <span className="text-[9px] text-gray-500">km/h</span></span>
         </div>
       </div>
     </div>

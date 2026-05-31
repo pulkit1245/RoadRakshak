@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence, animate } from 'framer-motion';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 const SEV_STYLE = {
-  high: { badge: 'bg-red-600', ring: 'ring-red-500', text: 'text-red-400', bg: 'bg-red-950/40', label: 'HIGH' },
-  medium: { badge: 'bg-orange-500', ring: 'ring-orange-500', text: 'text-orange-400', bg: 'bg-orange-950/30', label: 'MEDIUM' },
-  low: { badge: 'bg-yellow-500', ring: 'ring-yellow-500', text: 'text-yellow-400', bg: 'bg-yellow-950/20', label: 'LOW' },
-  unknown: { badge: 'bg-gray-600', ring: 'ring-gray-500', text: 'text-gray-400', bg: 'bg-gray-800/40', label: '?' },
+  high: { badge: 'bg-red-600', ring: 'ring-red-500', text: 'text-red-400', bg: 'bg-red-950/40', label: 'HIGH', glow: 'glow-border-danger' },
+  medium: { badge: 'bg-orange-500', ring: 'ring-orange-500', text: 'text-orange-400', bg: 'bg-orange-950/30', label: 'MEDIUM', glow: 'glow-border-warning' },
+  low: { badge: 'bg-yellow-500', ring: 'ring-yellow-500', text: 'text-yellow-400', bg: 'bg-yellow-950/20', label: 'LOW', glow: 'glow-border-warning' },
+  unknown: { badge: 'bg-gray-600', ring: 'ring-gray-500', text: 'text-gray-400', bg: 'bg-gray-800/40', label: '?', glow: '' },
 };
 
 const STATUS_META = {
@@ -23,6 +24,24 @@ function formatTime(iso) {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
+/* ── AnimatedCounter ── */
+function AnimatedCounter({ value, className }) {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const node = ref.current;
+    const numVal = typeof value === 'number' ? value : parseInt(value, 10);
+    if (isNaN(numVal)) { if (node) node.textContent = value; return; }
+    const controls = animate(0, numVal, {
+      duration: 1.2,
+      ease: [0.16, 1, 0.3, 1],
+      onUpdate(v) { if (node) node.textContent = Math.round(v).toLocaleString(); },
+    });
+    return () => controls.stop();
+  }, [value]);
+  return <span ref={ref} className={className}>{typeof value === 'number' ? '0' : value}</span>;
+}
+
+/* ── AlertCard ── */
 function AlertCard({ alert, hospitalId, onStatusUpdate }) {
   const sev = SEV_STYLE[(alert.severity || '').toLowerCase()] || SEV_STYLE.unknown;
   const sm = STATUS_META[alert.status] || { label: alert.status, color: 'bg-gray-500', icon: '?' };
@@ -38,9 +57,14 @@ function AlertCard({ alert, hospitalId, onStatusUpdate }) {
   };
 
   return (
-    <div className={`rounded-2xl border transition-all duration-300 overflow-hidden
-      ${alert.status === 'pending' ? `ring-2 ${sev.ring} animate-pulse-slow` : 'ring-0'}
-      ${sev.bg} border-white/10`}
+    <motion.div
+      className={`card-3d overflow-hidden transition-all duration-300
+        ${alert.status === 'pending' ? `ring-2 ${sev.ring} ${sev.glow}` : ''}
+      `}
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      layout
     >
       {/* Header */}
       <div className="px-5 py-4 flex items-center justify-between gap-2">
@@ -57,18 +81,18 @@ function AlertCard({ alert, hospitalId, onStatusUpdate }) {
             {sm.icon} {sm.label}
           </span>
         </div>
-        <span className="text-xs text-slate-500 shrink-0">{formatTime(alert.created_at)}</span>
+        <span className="text-xs text-brand-muted shrink-0">{formatTime(alert.created_at)}</span>
       </div>
 
       {/* Info */}
       <div className="px-5 pb-4 space-y-1">
         <p className="text-sm text-slate-200 flex items-start gap-1">
-          <span className="text-slate-500">📍</span>
+          <span className="text-brand-muted">📍</span>
           <span className="break-all">{alert.location}</span>
         </p>
-        <p className="text-xs text-slate-400">🚗 {alert.vehicles} vehicle{alert.vehicles !== 1 ? 's' : ''} involved</p>
+        <p className="text-xs text-brand-muted">🚗 {alert.vehicles} vehicle{alert.vehicles !== 1 ? 's' : ''} involved</p>
         {alert.distance_km != null && (
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-brand-muted">
             📏 ~{Number(alert.distance_km).toFixed(2)} km away
             {alert.eta_minutes != null && ` · ETA ~${alert.eta_minutes} min`}
           </p>
@@ -79,8 +103,8 @@ function AlertCard({ alert, hospitalId, onStatusUpdate }) {
       {/* Accident Reference Image */}
       {alert.snapshot_url && (
         <div className="px-5 pb-4">
-          <p className="text-[11px] text-slate-500 mb-1.5 uppercase tracking-wide font-semibold">📸 Accident Reference Image</p>
-          <div className="rounded-xl overflow-hidden border border-white/10 bg-black/40">
+          <p className="text-[11px] text-brand-muted mb-1.5 uppercase tracking-wide font-semibold">📸 Accident Reference Image</p>
+          <div className="rounded-xl overflow-hidden border border-brand-border bg-black/40">
             <img
               src={`${API_BASE}${alert.snapshot_url}`}
               alt="Accident snapshot"
@@ -100,13 +124,13 @@ function AlertCard({ alert, hospitalId, onStatusUpdate }) {
               <>
                 <button
                   onClick={() => updateStatus('accepted')}
-                  className="flex-1 min-w-[100px] bg-green-600 hover:bg-green-500 text-white text-xs font-bold py-2 px-3 rounded-xl transition"
+                  className="btn-3d flex-1 min-w-[100px] bg-green-600 hover:bg-green-500 text-white text-xs font-bold py-2 px-3"
                 >
                   ✅ ACCEPT
                 </button>
                 <button
                   onClick={() => updateStatus('rejected')}
-                  className="flex-1 min-w-[100px] bg-red-700 hover:bg-red-600 text-white text-xs font-bold py-2 px-3 rounded-xl transition"
+                  className="btn-3d-danger flex-1 min-w-[100px] text-xs font-bold py-2 px-3"
                 >
                   ❌ REJECT (Full)
                 </button>
@@ -115,7 +139,7 @@ function AlertCard({ alert, hospitalId, onStatusUpdate }) {
             {alert.status === 'accepted' && (
               <button
                 onClick={() => updateStatus('arrived_scene')}
-                className="flex-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2 px-3 rounded-xl transition"
+                className="btn-3d-accent flex-1 text-xs font-bold py-2 px-3"
               >
                 🚑 Arrived at Scene
               </button>
@@ -123,7 +147,7 @@ function AlertCard({ alert, hospitalId, onStatusUpdate }) {
             {alert.status === 'arrived_scene' && (
               <button
                 onClick={() => updateStatus('patient_loaded')}
-                className="flex-1 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold py-2 px-3 rounded-xl transition"
+                className="btn-3d flex-1 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold py-2 px-3"
               >
                 🛏️ Patient Loaded
               </button>
@@ -131,7 +155,7 @@ function AlertCard({ alert, hospitalId, onStatusUpdate }) {
             {alert.status === 'patient_loaded' && (
               <button
                 onClick={() => updateStatus('completed')}
-                className="flex-1 bg-gray-600 hover:bg-gray-500 text-white text-xs font-bold py-2 px-3 rounded-xl transition"
+                className="btn-3d flex-1 bg-brand-surface hover:bg-slate-600 text-white text-xs font-bold py-2 px-3"
               >
                 🏁 Mission Complete
               </button>
@@ -139,7 +163,7 @@ function AlertCard({ alert, hospitalId, onStatusUpdate }) {
           </div>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -273,39 +297,55 @@ export default function HospitalDashboard() {
     : null;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-brand-dark text-white relative overflow-hidden">
       <audio id="siren-audio" src="/preview1.mp3" preload="auto" />
 
+      {/* Background orbs */}
+      <div className="bg-orb bg-orb-blue w-[600px] h-[600px] top-[-15%] right-[-10%] opacity-30" />
+      <div className="bg-orb bg-orb-purple w-[500px] h-[500px] bottom-[-15%] left-[-10%] opacity-20" />
+
       {/* Notification toast */}
-      {notification && (
-        <div className={`fixed top-4 right-4 z-50 max-w-sm px-5 py-3 rounded-2xl shadow-2xl text-sm font-medium transition-all
-          ${notification.type === 'alert' ? 'bg-red-600 text-white' : 'bg-green-700 text-white'}`}
-        >
-          {notification.message}
-        </div>
-      )}
+      <AnimatePresence>
+        {notification && (
+          <motion.div
+            className={`fixed top-4 right-4 z-50 max-w-sm px-5 py-3 rounded-2xl shadow-3d-lg text-sm font-medium
+              ${notification.type === 'alert'
+                ? 'bg-red-600/90 backdrop-blur text-white glow-border-danger'
+                : 'bg-green-700/90 backdrop-blur text-white glow-border-success'}`}
+            initial={{ opacity: 0, x: 80, scale: 0.9 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 80, scale: 0.9 }}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+          >
+            {notification.message}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-slate-900/80 backdrop-blur border-b border-white/10 px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+      <div className="glass-panel sticky top-0 z-10 px-6 py-4 border-b border-brand-border">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4 relative z-10">
           <div className="flex items-center gap-3">
             <span className="text-2xl">🏥</span>
             <div>
               <h1 className="text-lg font-bold text-white leading-tight">{hospital.name}</h1>
-              <p className="text-xs text-slate-400">{hospital.address || 'Emergency Response Dashboard'}</p>
+              <p className="text-xs text-brand-muted">{hospital.address || 'Emergency Response Dashboard'}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             {/* WS indicator */}
-            <span className={`text-xs px-2 py-1 rounded-full font-semibold
-              ${wsStatus === 'connected' ? 'bg-green-800 text-green-200' :
-                wsStatus === 'connecting' ? 'bg-yellow-800 text-yellow-200' : 'bg-red-900 text-red-200'}`}
+            <span className={`text-xs px-2.5 py-1 rounded-full font-semibold border
+              ${wsStatus === 'connected'
+                ? 'bg-green-900/60 text-green-300 border-green-500/30 shadow-glow-green'
+                : wsStatus === 'connecting'
+                  ? 'bg-yellow-900/60 text-yellow-300 border-yellow-500/30'
+                  : 'bg-red-900/60 text-red-300 border-red-500/30 shadow-glow-red'}`}
             >
               {wsStatus === 'connected' ? '🟢 Live' : wsStatus === 'connecting' ? '🟡 Connecting…' : '🔴 Offline'}
             </span>
             <button
               onClick={handleLogout}
-              className="text-xs text-slate-400 hover:text-red-400 transition px-3 py-1.5 rounded-lg border border-white/10 hover:border-red-500/30"
+              className="btn-3d text-xs text-slate-300 hover:text-red-400 px-3 py-1.5 bg-brand-surface hover:border-red-500/30 transition-colors"
             >
               Sign out
             </button>
@@ -313,8 +353,12 @@ export default function HospitalDashboard() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
-
+      <motion.div
+        className="max-w-6xl mx-auto px-6 py-8 space-y-8 relative z-[1]"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      >
         {/* Stats row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
@@ -322,22 +366,29 @@ export default function HospitalDashboard() {
             { label: 'Active Missions', value: active.length, color: 'text-blue-400', icon: '🚑' },
             { label: 'Beds Available', value: hospital.beds_available ?? '—', color: 'text-green-400', icon: '🛏️' },
             { label: 'Total Capacity', value: hospital.capacity_total ?? '—', color: 'text-slate-400', icon: '🏥' },
-          ].map(({ label, value, color, icon }) => (
-            <div key={label} className="bg-white/5 border border-white/10 rounded-2xl p-4">
-              <p className="text-xs text-slate-400">{icon} {label}</p>
-              <p className={`text-3xl font-extrabold mt-1 ${color}`}>{value}</p>
-            </div>
+          ].map(({ label, value, color, icon }, i) => (
+            <motion.div
+              key={label}
+              className="stat-3d"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: i * 0.08, ease: [0.16, 1, 0.3, 1] }}
+              whileHover={{ y: -4, scale: 1.02 }}
+            >
+              <p className="text-xs text-brand-muted">{icon} {label}</p>
+              <AnimatedCounter value={value} className={`text-3xl font-extrabold mt-1 block ${color}`} />
+            </motion.div>
           ))}
         </div>
 
         {/* Bed management */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+        <div className="card-3d p-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-white">🛏️ Bed Availability</h2>
             {!bedsEditing ? (
               <button
                 onClick={() => setBedsEditing(true)}
-                className="text-xs text-blue-400 hover:text-blue-300 transition border border-blue-500/30 px-3 py-1 rounded-lg"
+                className="btn-3d text-xs text-blue-400 hover:text-blue-300 bg-brand-surface border-blue-500/30 px-3 py-1 transition-colors"
               >
                 Update
               </button>
@@ -347,24 +398,26 @@ export default function HospitalDashboard() {
                   type="number"
                   value={beds}
                   onChange={(e) => setBeds(e.target.value)}
-                  className="w-20 bg-white/10 border border-white/20 text-white rounded-lg px-2 py-1 text-sm text-center"
+                  className="input-3d w-20 text-center text-sm"
                   min="0"
                 />
-                <button onClick={handleBedsSave} className="text-xs bg-green-700 hover:bg-green-600 text-white px-3 py-1 rounded-lg transition">Save</button>
-                <button onClick={() => setBedsEditing(false)} className="text-xs text-slate-400 hover:text-white transition">Cancel</button>
+                <button onClick={handleBedsSave} className="btn-3d text-xs bg-green-700 hover:bg-green-600 text-white px-3 py-1">Save</button>
+                <button onClick={() => setBedsEditing(false)} className="text-xs text-brand-muted hover:text-white transition-colors">Cancel</button>
               </div>
             )}
           </div>
           {bedPct != null && (
             <div>
-              <div className="flex justify-between text-xs text-slate-400 mb-1">
+              <div className="flex justify-between text-xs text-brand-muted mb-1">
                 <span>{hospital.beds_available} available</span>
                 <span>{bedPct}% capacity</span>
               </div>
-              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all ${bedPct > 50 ? 'bg-green-500' : bedPct > 20 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                  style={{ width: `${bedPct}%` }}
+              <div className="h-2.5 bg-black/40 rounded-full overflow-hidden shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)]">
+                <motion.div
+                  className={`h-full rounded-full ${bedPct > 50 ? 'bg-green-500 shadow-glow-green' : bedPct > 20 ? 'bg-yellow-500' : 'bg-red-500 shadow-glow-red'}`}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${bedPct}%` }}
+                  transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
                 />
               </div>
             </div>
@@ -376,15 +429,19 @@ export default function HospitalDashboard() {
           <div className="flex items-center gap-3 mb-4">
             <h2 className="text-lg font-bold text-white">🚨 Incoming Alerts</h2>
             {pending.length > 0 && (
-              <span className="bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded-full animate-pulse">
+              <span className="bg-red-600 text-white text-xs font-bold px-2.5 py-0.5 rounded-full animate-pulse shadow-glow-red">
                 {pending.length} new
               </span>
             )}
           </div>
           {pending.length === 0 ? (
-            <div className="bg-white/5 border border-white/10 rounded-2xl py-12 text-center">
-              <p className="text-3xl mb-2">🛡️</p>
-              <p className="text-slate-400 text-sm">No pending alerts — all clear</p>
+            <div className="card-3d py-12 text-center">
+              <motion.p
+                className="text-3xl mb-2 inline-block animate-float"
+              >
+                🛡️
+              </motion.p>
+              <p className="text-brand-muted text-sm">No pending alerts — all clear</p>
               <p className="text-slate-600 text-xs mt-1">New accident alerts will appear here instantly via live WebSocket</p>
             </div>
           ) : (
@@ -411,24 +468,31 @@ export default function HospitalDashboard() {
         {/* History */}
         {history.length > 0 && (
           <section>
-            <h2 className="text-lg font-bold text-slate-400 mb-4">📋 Mission History</h2>
+            <h2 className="text-lg font-bold text-brand-muted mb-4">📋 Mission History</h2>
             <div className="space-y-3">
-              {history.map((a) => (
-                <div key={a.id} className="bg-white/3 border border-white/8 rounded-xl px-5 py-3 flex items-center gap-4 opacity-70">
+              {history.map((a, i) => (
+                <motion.div
+                  key={a.id}
+                  className="card-3d px-5 py-3 flex items-center gap-4 opacity-60 hover:opacity-90 transition-opacity"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 0.6, y: 0 }}
+                  transition={{ duration: 0.35, delay: i * 0.05 }}
+                  whileHover={{ y: -2 }}
+                >
                   <span className="text-lg">{STATUS_META[a.status]?.icon || '?'}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-slate-300 truncate">{a.location}</p>
-                    <p className="text-xs text-slate-500">{formatTime(a.created_at)} · {a.vehicles} vehicles · {STATUS_META[a.status]?.label}</p>
+                    <p className="text-xs text-brand-muted">{formatTime(a.created_at)} · {a.vehicles} vehicles · {STATUS_META[a.status]?.label}</p>
                   </div>
                   <span className={`text-xs font-bold text-white uppercase px-2 py-0.5 rounded ${SEV_STYLE[(a.severity || '').toLowerCase()]?.badge || 'bg-gray-600'}`}>
                     {a.severity}
                   </span>
-                </div>
+                </motion.div>
               ))}
             </div>
           </section>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }

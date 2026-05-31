@@ -1,23 +1,272 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ──────────────────────────────────────────────
+   BASE LAYER
+   ────────────────────────────────────────────── */
 @layer base {
+  :root {
+    --brand-dark: #0a0e1a;
+    --brand-card: #111827;
+    --brand-accent: #3b82f6;
+    --brand-success: #10b981;
+    --brand-danger: #ef4444;
+    --brand-warning: #f59e0b;
+  }
+
   body {
     @apply bg-brand-dark text-white font-sans antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Selection */
+  ::selection {
+    background: rgba(59, 130, 246, 0.25);
   }
 }
 
+/* ──────────────────────────────────────────────
+   COMPONENT LAYER
+   ────────────────────────────────────────────── */
 @layer components {
-  .glass-card {
-    @apply bg-brand-card bg-glass-gradient border border-brand-border/50 backdrop-blur-md rounded-2xl shadow-glass transition-all duration-300;
+  /* ── 3D Volumetric Card ── */
+  .card-3d {
+    @apply relative bg-brand-card border border-brand-border/60 rounded-2xl shadow-3d;
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.05),
+      0 1px 2px rgba(0,0,0,0.3),
+      0 4px 8px rgba(0,0,0,0.2),
+      0 12px 24px rgba(0,0,0,0.15);
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   }
-  
-  .glass-button {
-    @apply px-4 py-2 rounded-xl font-semibold transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:pointer-events-none;
+
+  .card-3d:hover {
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.08),
+      0 4px 8px rgba(0,0,0,0.35),
+      0 12px 24px rgba(0,0,0,0.3),
+      0 32px 64px rgba(0,0,0,0.25);
+    transform: translateY(-2px);
+    border-color: rgba(59, 130, 246, 0.15);
+  }
+
+  /* ── Glass Panel (Frosted) ── */
+  .glass-panel {
+    @apply relative backdrop-blur-xl rounded-2xl border;
+    background: rgba(17, 24, 39, 0.7);
+    border-color: rgba(255, 255, 255, 0.06);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.04),
+      0 4px 16px rgba(0,0,0,0.3);
+  }
+
+  /* ── Legacy glass-card (updated to match 3D system) ── */
+  .glass-card {
+    @apply card-3d;
+  }
+
+  /* ── 3D Input Field ── */
+  .input-3d {
+    @apply w-full rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 transition-all duration-300;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+  }
+
+  .input-3d:focus {
+    outline: none;
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow:
+      inset 0 2px 4px rgba(0,0,0,0.2),
+      0 0 0 3px rgba(59, 130, 246, 0.1),
+      0 0 20px rgba(59, 130, 246, 0.08);
+  }
+
+  /* ── 3D Button ── */
+  .btn-3d {
+    @apply relative px-6 py-3 rounded-xl font-semibold text-sm transition-all duration-300;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.15),
+      0 2px 4px rgba(0,0,0,0.3),
+      0 4px 8px rgba(0,0,0,0.2);
+  }
+
+  .btn-3d:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.2),
+      0 4px 8px rgba(0,0,0,0.35),
+      0 8px 16px rgba(0,0,0,0.25);
+  }
+
+  .btn-3d:active {
+    transform: translateY(0);
+    box-shadow:
+      inset 0 2px 4px rgba(0,0,0,0.3),
+      0 1px 2px rgba(0,0,0,0.2);
+  }
+
+  .btn-3d-accent {
+    @apply btn-3d bg-brand-accent text-white;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.2),
+      0 2px 4px rgba(59,130,246,0.3),
+      0 4px 12px rgba(59,130,246,0.2);
+  }
+
+  .btn-3d-accent:hover {
+    @apply bg-blue-500;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.25),
+      0 4px 8px rgba(59,130,246,0.35),
+      0 8px 24px rgba(59,130,246,0.25);
+  }
+
+  .btn-3d-danger {
+    @apply btn-3d bg-brand-danger text-white;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.2),
+      0 2px 4px rgba(239,68,68,0.3),
+      0 4px 12px rgba(239,68,68,0.2);
+  }
+
+  /* ── Nav Link 3D ── */
+  .nav-link-3d {
+    @apply flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-400 transition-all duration-300;
+  }
+
+  .nav-link-3d:hover {
+    @apply text-white;
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+    transform: translateY(-1px);
+  }
+
+  /* ── Stat Widget ── */
+  .stat-3d {
+    @apply card-3d p-6;
+  }
+
+  .stat-3d:hover {
+    transform: translateY(-4px);
+  }
+
+  /* ── Tab Bar ── */
+  .tab-3d {
+    @apply px-4 py-3 text-sm font-semibold transition-all duration-300 rounded-lg;
+  }
+
+  .tab-3d-active {
+    @apply text-white;
+    background: rgba(59, 130, 246, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 0 12px rgba(59,130,246,0.08);
+  }
+
+  .tab-3d-inactive {
+    @apply text-gray-500 hover:text-gray-300;
+  }
+
+  .tab-3d-inactive:hover {
+    background: rgba(255, 255, 255, 0.03);
   }
 }
 
+/* ──────────────────────────────────────────────
+   UTILITIES
+   ────────────────────────────────────────────── */
+
+/* Custom Scrollbar (Dark) */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 99px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Animated Background Orb */
+.bg-orb {
+  position: fixed;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.12;
+  pointer-events: none;
+  z-index: 0;
+  animation: orbFloat 20s ease-in-out infinite;
+}
+
+.bg-orb-blue {
+  background: radial-gradient(circle, #3b82f6, transparent 70%);
+  top: -200px;
+  right: -100px;
+}
+
+.bg-orb-purple {
+  background: radial-gradient(circle, #8b5cf6, transparent 70%);
+  bottom: -200px;
+  left: -100px;
+  animation-delay: -10s;
+}
+
+@keyframes orbFloat {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25%      { transform: translate(30px, -20px) scale(1.05); }
+  50%      { transform: translate(-20px, 30px) scale(0.95); }
+  75%      { transform: translate(10px, 20px) scale(1.02); }
+}
+
+/* Staggered animation delay utility */
+.stagger-1 { animation-delay: 50ms; }
+.stagger-2 { animation-delay: 100ms; }
+.stagger-3 { animation-delay: 150ms; }
+.stagger-4 { animation-delay: 200ms; }
+.stagger-5 { animation-delay: 250ms; }
+
+/* Severity Glow Borders */
+.glow-border-danger {
+  box-shadow: inset 0 0 0 1px rgba(239,68,68,0.2), 0 0 16px rgba(239,68,68,0.06);
+}
+
+.glow-border-warning {
+  box-shadow: inset 0 0 0 1px rgba(245,158,11,0.2), 0 0 16px rgba(245,158,11,0.06);
+}
+
+.glow-border-success {
+  box-shadow: inset 0 0 0 1px rgba(16,185,129,0.2), 0 0 16px rgba(16,185,129,0.06);
+}
+
+.glow-border-accent {
+  box-shadow: inset 0 0 0 1px rgba(59,130,246,0.2), 0 0 16px rgba(59,130,246,0.06);
+}
+
+/* Global Box Sizing */
 * {
   @apply box-border;
+}
+
+/* Leaflet dark override */
+.leaflet-container {
+  background: #0a0e1a !important;
+}
+
+/* Override select styling for dark mode */
+select option {
+  background: #111827;
+  color: white;
 }

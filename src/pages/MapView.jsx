@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import { motion } from 'framer-motion';
 import L from 'leaflet';
 import { mapAPI } from '../services/api';
 
@@ -31,7 +32,6 @@ const hospitalIcon = new L.Icon({
   shadowSize: [41, 41],
 });
 
-// Green icon for Ola Maps hospitals (nearest to accident)
 const olaHospitalIcon = new L.Icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
@@ -41,7 +41,6 @@ const olaHospitalIcon = new L.Icon({
   shadowSize: [41, 41],
 });
 
-/** Haversine distance in km between two lat/lon points. */
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -59,15 +58,14 @@ export default function MapView() {
   const [searchParams] = useSearchParams();
   const [accidents, setAccidents] = useState([]);
   const [hospitals, setHospitals] = useState([]);
-  const [olaHospitals, setOlaHospitals] = useState([]);   // from Live Feed via URL
+  const [olaHospitals, setOlaHospitals] = useState([]);
   const [selectedAccident, setSelectedAccident] = useState(null);
   const [route, setRoute] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [mapCenter, setMapCenter] = useState([28.7041, 77.1025]);
 
-  // Default center (can be updated based on your city)
-  const defaultCenter = [28.7041, 77.1025]; // Delhi, India
+  const defaultCenter = [28.7041, 77.1025];
 
   const fetchMapData = async () => {
     let refLat = defaultCenter[0];
@@ -86,9 +84,7 @@ export default function MapView() {
           refLon = coords.longitude;
         }
       }
-    } catch (_) {
-      /* use defaultCenter */
-    }
+    } catch (_) {}
     try {
       const [accidentsData, hospitalsData] = await Promise.all([
         mapAPI.getAccidents(),
@@ -112,7 +108,6 @@ export default function MapView() {
     return () => clearInterval(intervalId);
   }, []);
 
-  // Deep link from Live Feed: ?accidentLat=&accidentLon=&olaHospitals=[...]
   useEffect(() => {
     const alat = searchParams.get('accidentLat');
     const alon = searchParams.get('accidentLon');
@@ -133,14 +128,11 @@ export default function MapView() {
     };
     setSelectedAccident(synthetic);
 
-    // Parse Ola hospitals from URL
     try {
       const raw = searchParams.get('olaHospitals');
       if (raw) setOlaHospitals(JSON.parse(decodeURIComponent(raw)));
     } catch (_) {}
 
-    // Only call backend route if Ola didn't provide hospitals;
-    // Ola is ranked by real distance so its #1 is already the nearest.
     try {
       const raw = searchParams.get('olaHospitals');
       const parsed = raw ? JSON.parse(decodeURIComponent(raw)) : [];
@@ -175,41 +167,50 @@ export default function MapView() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-brand-dark text-white">
       {/* Header */}
-      <div className="bg-white shadow sticky top-0 z-10">
-        <div className="max-w-full px-6 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">🗺️ Traffic Incident Map</h1>
-            <p className="text-sm text-gray-600">Real-time accident locations & hospital routes</p>
+      <nav className="glass-panel sticky top-0 z-[500] border-0 border-b border-brand-border/40" style={{ borderRadius: 0 }}>
+        <div className="max-w-full px-6 py-3.5 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-purple-500/15 rounded-xl flex items-center justify-center border border-purple-500/20">
+              <span className="text-xl">🗺️</span>
+            </div>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight">Spatial <span className="text-purple-400">Map</span></h1>
+              <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-widest">Real-time accident locations & hospital routes</p>
+            </div>
           </div>
           <button
             onClick={() => navigate('/dashboard')}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
+            className="nav-link-3d"
           >
-            ← Dashboard
+            <span>←</span> Dashboard
           </button>
         </div>
-      </div>
+      </nav>
 
-      {/* Error Message */}
+      {/* Error */}
       {error && (
-        <div className="max-w-full px-6 py-4">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-red-800 text-sm">⚠️ {error} - Make sure backend is running</p>
+        <div className="max-w-full px-6 py-3">
+          <div className="glass-panel p-3.5 glow-border-danger flex items-center gap-3">
+            <span className="text-brand-danger">⚠️</span>
+            <p className="text-brand-danger text-xs font-semibold">{error} — Make sure backend is running</p>
           </div>
         </div>
       )}
 
       {/* Main Content */}
-      <div className="flex h-[calc(100vh-140px)]">
+      <div className="flex h-[calc(100vh-72px)]">
         {/* Map */}
         <div className="flex-1 relative z-0">
           {loading ? (
-            <div className="w-full h-full flex items-center justify-center bg-gray-200">
+            <div className="w-full h-full flex items-center justify-center bg-brand-dark">
               <div className="text-center">
-                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                <p className="mt-4 text-gray-600">Loading map...</p>
+                <div className="relative w-16 h-16 mx-auto">
+                  <div className="absolute inset-0 border-2 border-brand-accent/10 rounded-full"></div>
+                  <div className="absolute inset-0 border-2 border-t-brand-accent rounded-full animate-spin"></div>
+                </div>
+                <p className="mt-4 text-gray-500 text-xs font-medium uppercase tracking-wider">Loading map...</p>
               </div>
             </div>
           ) : (
@@ -219,11 +220,11 @@ export default function MapView() {
               style={{ height: '100%', width: '100%' }}
             >
               <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
               />
 
-              {/* Accident Markers (Red) */}
+              {/* Accident Markers */}
               {accidents.map((accident) => (
                 <Marker
                   key={accident.id}
@@ -259,7 +260,7 @@ export default function MapView() {
                 </Marker>
               ))}
 
-              {/* Hospital Markers (Blue) — DB-backed */}
+              {/* Hospital Markers */}
               {hospitals.map((hospital) => (
                 <Marker
                   key={hospital.id}
@@ -284,7 +285,7 @@ export default function MapView() {
                 </Marker>
               ))}
 
-              {/* Ola Maps Hospitals (Green) — nearest to accident */}
+              {/* Ola Maps Hospitals */}
               {olaHospitals.filter((h) => h.lat != null && h.lon != null).map((h) => (
                 <Marker
                   key={`ola-${h.placeId}`}
@@ -305,9 +306,9 @@ export default function MapView() {
               {route?.route_coords && route.route_coords.length > 0 && (
                 <Polyline
                   positions={route.route_coords.map((coord) => [coord[0], coord[1]])}
-                  color="green"
+                  color="#10b981"
                   weight={3}
-                  opacity={0.7}
+                  opacity={0.8}
                 />
               )}
             </MapContainer>
@@ -315,91 +316,99 @@ export default function MapView() {
         </div>
 
         {/* Right Sidebar */}
-        <div className="w-80 bg-white border-l border-gray-200 overflow-y-auto">
-          <div className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">📍 Incident Details</h3>
+        <div className="w-80 bg-brand-card border-l border-brand-border/40 overflow-y-auto custom-scrollbar">
+          <div className="p-5">
+            <h3 className="text-sm font-bold text-white mb-5 flex items-center gap-2">
+              <span className="w-2 h-2 bg-brand-accent rounded-full"></span>
+              Incident Details
+            </h3>
 
             {selectedAccident ? (
-              <div className="space-y-4">
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-4"
+              >
                 {/* Selected Accident */}
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="font-bold text-red-900">🚨 {selectedAccident.type || 'Accident'}</p>
-                  <p className="text-sm text-red-700 mt-2">
+                <div className="card-3d p-4 glow-border-danger" style={{ background: 'rgba(239,68,68,0.06)' }}>
+                  <p className="font-bold text-sm text-brand-danger mb-2">🚨 {selectedAccident.type || 'Accident'}</p>
+                  <p className="text-xs text-gray-400 mt-1">
                     {new Date(selectedAccident.timestamp).toLocaleString()}
                   </p>
-                  <p className="text-xs text-red-700 mt-2">
+                  <p className="text-xs text-gray-400 mt-1.5">
                     📍 {selectedAccident.location || 'Unknown location'}
                   </p>
-                  <p className="text-xs text-red-700 mt-1">
-                    Coordinates: {Number(selectedAccident.latitude).toFixed(6)}, {Number(selectedAccident.longitude).toFixed(6)}
+                  <p className="text-xs text-gray-500 mt-1 font-mono">
+                    {Number(selectedAccident.latitude).toFixed(6)}, {Number(selectedAccident.longitude).toFixed(6)}
                   </p>
-                  <p className="text-xs text-red-600 mt-2">
-                    Severity: <span className="font-semibold">{selectedAccident.severity}</span>
+                  <p className="text-xs text-brand-danger mt-2 font-semibold">
+                    Severity: {selectedAccident.severity}
                   </p>
-                  <p className="text-xs text-red-700 mt-2">
-                    Description: {selectedAccident.description || 'No description available.'}
+                  <p className="text-xs text-gray-400 mt-1.5">
+                    {selectedAccident.description || 'No description available.'}
                   </p>
                 </div>
 
-                {/* Nearest Hospital — prefer Ola #1, fallback to backend route */}
+                {/* Nearest Hospital */}
                 {olaHospitals.length > 0 ? (
-                  <div className="p-4 bg-green-50 border border-green-300 rounded-lg">
-                    <p className="font-bold text-green-800">🏥 Nearest Hospital (Ola Maps)</p>
-                    <p className="text-sm font-semibold text-green-900 mt-2">{olaHospitals[0].name}</p>
+                  <div className="card-3d p-4 glow-border-success" style={{ background: 'rgba(16,185,129,0.06)' }}>
+                    <p className="font-bold text-sm text-brand-success mb-2">🏥 Nearest Hospital (Ola Maps)</p>
+                    <p className="text-xs font-semibold text-white mt-1">{olaHospitals[0].name}</p>
                     {olaHospitals[0].address && (
-                      <p className="text-xs text-gray-600 mt-1">{olaHospitals[0].address}</p>
+                      <p className="text-xs text-gray-400 mt-1">{olaHospitals[0].address}</p>
                     )}
                     {olaHospitals[0].lat != null && selectedAccident?.latitude != null && (
-                      <p className="text-sm text-green-700 mt-2">
+                      <p className="text-xs text-brand-success mt-2 font-semibold">
                         ~{haversineKm(
                             selectedAccident.latitude, selectedAccident.longitude,
                             olaHospitals[0].lat, olaHospitals[0].lon
                           ).toFixed(2)} km (straight-line)
                       </p>
                     )}
-                    <p className="text-xs text-green-600 mt-1">Ranked #1 by distance</p>
+                    <p className="text-[10px] text-brand-success mt-1 opacity-70">Ranked #1 by distance</p>
                   </div>
                 ) : route ? (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <p className="font-bold text-green-900">✅ Route to Hospital</p>
-                    <p className="text-sm text-green-700 mt-2">Distance: {route.distance_km?.toFixed(2)} km</p>
-                    <p className="text-sm text-green-700">ETA: {route.eta_minutes} minutes</p>
-                    <p className="text-xs text-green-600 mt-2">
-                      Hospital: {route.hospital_name || route.hospital_id}
+                  <div className="card-3d p-4 glow-border-success" style={{ background: 'rgba(16,185,129,0.06)' }}>
+                    <p className="font-bold text-sm text-brand-success mb-2">✅ Route to Hospital</p>
+                    <p className="text-xs text-gray-300">Distance: {route.distance_km?.toFixed(2)} km</p>
+                    <p className="text-xs text-gray-300">ETA: {route.eta_minutes} minutes</p>
+                    <p className="text-xs text-brand-success mt-2 font-medium">
+                      {route.hospital_name || route.hospital_id}
                     </p>
                     {route.route_source && (
-                      <p className="text-xs text-gray-500 mt-1">Route: {route.route_source}</p>
+                      <p className="text-[10px] text-gray-500 mt-1">Route: {route.route_source}</p>
                     )}
                   </div>
                 ) : null}
-              </div>
+              </motion.div>
             ) : (
-              <div className="text-center py-8">
-                <p className="text-gray-600 text-sm">👈 Click on a red marker to view accident details</p>
+              <div className="text-center py-8 opacity-40">
+                <p className="text-gray-400 text-xs">👈 Click on a red marker to view details</p>
               </div>
             )}
 
             {/* Accidents List */}
-            <div className="mt-6 border-t border-gray-200 pt-6">
-              <p className="font-semibold text-gray-900 mb-3">🚨 All Accidents ({accidents.length})</p>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
+            <div className="mt-6 border-t border-brand-border/40 pt-5">
+              <p className="text-xs font-bold text-white mb-3 uppercase tracking-wider">🚨 All Accidents ({accidents.length})</p>
+              <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
                 {accidents.length === 0 ? (
-                  <p className="text-sm text-gray-500">No accidents reported</p>
+                  <p className="text-xs text-gray-500">No accidents reported</p>
                 ) : (
                   accidents.map((accident) => (
                     <div
                       key={accident.id}
                       onClick={() => handleAccidentClick(accident)}
-                      className={`p-2 rounded cursor-pointer transition ${
+                      className={`p-2.5 rounded-xl cursor-pointer transition-all duration-200 ${
                         selectedAccident?.id === accident.id
-                          ? 'bg-red-100 border border-red-300'
-                          : 'bg-gray-100 hover:bg-gray-200'
+                          ? 'glow-border-danger'
+                          : 'hover:bg-white/5'
                       }`}
+                      style={selectedAccident?.id === accident.id ? { background: 'rgba(239,68,68,0.08)' } : {}}
                     >
-                      <p className="text-xs font-semibold text-red-600">
+                      <p className="text-xs font-semibold text-brand-danger">
                         {accident.type || 'Accident'}
                       </p>
-                      <p className="text-xs text-gray-600">
+                      <p className="text-[10px] text-gray-500 mt-0.5">
                         {new Date(accident.timestamp).toLocaleTimeString()}
                       </p>
                     </div>
@@ -408,39 +417,39 @@ export default function MapView() {
               </div>
             </div>
 
-            {/* Hospitals List — DB */}
-            <div className="mt-6 border-t border-gray-200 pt-6">
-              <p className="font-semibold text-gray-900 mb-3">🏥 Hospitals ({hospitals.length})</p>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
+            {/* Hospitals List */}
+            <div className="mt-6 border-t border-brand-border/40 pt-5">
+              <p className="text-xs font-bold text-white mb-3 uppercase tracking-wider">🏥 Hospitals ({hospitals.length})</p>
+              <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
                 {hospitals.length === 0 ? (
-                  <p className="text-sm text-gray-500">No hospitals found</p>
+                  <p className="text-xs text-gray-500">No hospitals found</p>
                 ) : (
                   hospitals.map((hospital) => (
-                    <div key={hospital.id} className="p-2 bg-blue-50 rounded border border-blue-200">
-                      <p className="text-xs font-semibold text-blue-600">{hospital.name}</p>
-                      <p className="text-xs text-gray-600">{hospital.distance_km?.toFixed(2)} km away</p>
+                    <div key={hospital.id} className="p-2.5 rounded-xl glow-border-accent" style={{ background: 'rgba(59,130,246,0.04)' }}>
+                      <p className="text-xs font-semibold text-brand-accent">{hospital.name}</p>
+                      <p className="text-[10px] text-gray-500">{hospital.distance_km?.toFixed(2)} km away</p>
                     </div>
                   ))
                 )}
               </div>
             </div>
 
-            {/* Ola Maps Hospitals — shown when linked from Live Feed */}
+            {/* Ola Maps Hospitals */}
             {olaHospitals.length > 0 && (
-              <div className="mt-6 border-t border-green-200 pt-6">
-                <p className="font-semibold text-gray-900 mb-1">🗺️ Nearest Hospitals (Ola Maps)</p>
-                <p className="text-xs text-gray-500 mb-3">Ranked by distance from accident</p>
-                <ol className="space-y-2">
+              <div className="mt-6 border-t border-brand-border/40 pt-5">
+                <p className="text-xs font-bold text-white mb-1 uppercase tracking-wider">🗺️ Nearest Hospitals (Ola Maps)</p>
+                <p className="text-[10px] text-gray-500 mb-3">Ranked by distance from accident</p>
+                <div className="space-y-2">
                   {olaHospitals.map((h) => (
-                    <li key={h.placeId} className="flex items-start gap-2 p-2 bg-green-50 rounded border border-green-200">
-                      <span className="shrink-0 w-5 h-5 bg-green-600 text-white rounded-full flex items-center justify-center text-xs font-bold">{h.rank}</span>
-                      <div>
-                        <p className="text-xs font-semibold text-green-800">{h.name}</p>
-                        {h.address && <p className="text-xs text-gray-500 leading-tight">{h.address}</p>}
+                    <div key={h.placeId} className="flex items-start gap-2.5 p-2.5 rounded-xl glow-border-success" style={{ background: 'rgba(16,185,129,0.04)' }}>
+                      <span className="shrink-0 w-5 h-5 bg-brand-success/20 text-brand-success rounded-full flex items-center justify-center text-[10px] font-bold">{h.rank}</span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-brand-success">{h.name}</p>
+                        {h.address && <p className="text-[10px] text-gray-500 leading-tight truncate">{h.address}</p>}
                       </div>
-                    </li>
+                    </div>
                   ))}
-                </ol>
+                </div>
               </div>
             )}
           </div>

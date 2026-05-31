@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
@@ -34,21 +35,34 @@ export default function HospitalLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-brand-dark flex items-center justify-center px-4 relative overflow-hidden">
+      {/* Animated background orbs */}
+      <div className="bg-orb bg-orb-blue w-[500px] h-[500px] top-[-10%] left-[-10%]" />
+      <div className="bg-orb bg-orb-purple w-[400px] h-[400px] bottom-[-10%] right-[-10%]" />
+
+      <motion.div
+        className="w-full max-w-md relative z-10"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+      >
         {/* Logo area */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-blue-600/20 border border-blue-500/30 mb-4 shadow-lg shadow-blue-500/10">
+          <motion.div
+            className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-brand-accent/15 border border-brand-accent/30 mb-4 shadow-glow-blue animate-float"
+            whileHover={{ scale: 1.1, rotate: 5 }}
+            transition={{ type: 'spring', stiffness: 300 }}
+          >
             <span className="text-4xl">🏥</span>
-          </div>
+          </motion.div>
           <h1 className="text-3xl font-bold text-white tracking-tight">Hospital Portal</h1>
-          <p className="text-blue-300 mt-2 text-sm">RoadRakshak — Emergency Response Network</p>
+          <p className="text-brand-accent/80 mt-2 text-sm">RoadRakshak — Emergency Response Network</p>
         </div>
 
         {/* Card */}
-        <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-8 shadow-2xl">
+        <div className="card-3d p-8">
           <h2 className="text-lg font-semibold text-white mb-1">Sign in with Hospital Code</h2>
-          <p className="text-sm text-slate-400 mb-6">
+          <p className="text-sm text-brand-muted mb-6">
             Enter your unique hospital access code to view live accident alerts.
           </p>
 
@@ -62,56 +76,59 @@ export default function HospitalLogin() {
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 placeholder="e.g. HOSP-AIIMS"
-                className="w-full bg-white/10 border border-white/20 text-white placeholder-slate-500
-                           rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
-                           focus:border-transparent transition"
+                className="input-3d w-full"
                 autoFocus
                 required
               />
             </div>
 
             {error && (
-              <div className="bg-red-500/15 border border-red-500/30 rounded-xl px-4 py-3">
+              <motion.div
+                className="glass-panel glow-border-danger px-4 py-3"
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
                 <p className="text-red-300 text-sm">⚠️ {error}</p>
-              </div>
+              </motion.div>
             )}
 
             <button
               type="submit"
               disabled={loading || !code.trim()}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-not-allowed
-                         text-white font-semibold py-3 rounded-xl transition-all duration-200 text-sm
-                         shadow-lg shadow-blue-500/20"
+              className="btn-3d-accent w-full py-3 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {loading ? '🔄 Verifying…' : '→ Access Dashboard'}
             </button>
           </form>
 
           {/* Demo codes */}
-          <div className="mt-6 pt-5 border-t border-white/10">
-            <p className="text-xs text-slate-500 mb-3">Demo access codes:</p>
+          <div className="mt-6 pt-5 border-t border-brand-border">
+            <p className="text-xs text-brand-muted mb-3">Demo access codes:</p>
             <div className="grid grid-cols-2 gap-2">
               {['HOSP-AIIMS', 'HOSP-APOLLO', 'HOSP-FORTIS', 'HOSP-MAX'].map((c) => (
-                <button
+                <motion.button
                   key={c}
                   onClick={() => setCode(c)}
-                  className="text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300
-                             px-3 py-1.5 rounded-lg transition text-left font-mono"
+                  className="card-3d text-xs text-slate-300 px-3 py-2 text-left font-mono hover:text-white hover:border-brand-accent/40 transition-colors"
+                  whileHover={{ scale: 1.03, y: -2 }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 17 }}
                 >
                   {c}
-                </button>
+                </motion.button>
               ))}
             </div>
           </div>
         </div>
 
-        <p className="text-center text-slate-600 text-xs mt-6">
+        <p className="text-center text-brand-muted/60 text-xs mt-6">
           Admin?{' '}
-          <a href="/login" className="text-blue-400 hover:text-blue-300 underline">
+          <a href="/login" className="text-brand-accent hover:text-blue-300 underline transition-colors">
             Sign in to admin dashboard →
           </a>
         </p>
-      </div>
+      </motion.div>
     </div>
   );
 }
